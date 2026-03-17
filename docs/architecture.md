@@ -193,3 +193,10 @@ JSON-логи содержат:
 
 - plain manifests в `k8s/`
 - Helm chart в `helm/ai-incident-copilot/`
+
+Для Kubernetes миграции вынесены в отдельный Job:
+
+- plain manifests: `k8s/migration-job.yaml`
+- Helm: hook Job `pre-install,pre-upgrade`
+
+Это позволяет не выполнять `alembic upgrade head` при каждом рестарте API-pod и упрощает rollout.

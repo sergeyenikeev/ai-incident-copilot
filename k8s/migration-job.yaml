@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ai-incident-db-migration
+  labels:
+    app.kubernetes.io/name: ai-incident-copilot
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-incident-copilot
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migration
+          image: ghcr.io/sergeyenikeev/ai-incident-copilot-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-lc", "alembic upgrade head"]
+          envFrom:
+            - configMapRef:
+                name: ai-incident-copilot-config
+            - secretRef:
+                name: ai-incident-copilot-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi

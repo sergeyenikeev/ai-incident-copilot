@@ -30,6 +30,8 @@ api:
     repository: ghcr.io/sergeyenikeev/ai-incident-copilot-api
     tag: latest
     pullPolicy: IfNotPresent
+  command:
+    - ai-incident-api
   resources:
     requests:
       cpu: 100m
@@ -61,6 +63,26 @@ worker:
     limits:
       cpu: 500m
       memory: 512Mi
+
+migration:
+  enabled: true
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  image:
+    repository: ghcr.io/sergeyenikeev/ai-incident-copilot-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  command:
+    - sh
+    - -lc
+    - alembic upgrade head
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
 
 ingress:
   enabled: true

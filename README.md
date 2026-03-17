@@ -308,6 +308,7 @@ Pipeline выполняет:
 ```bash
 kubectl apply -f k8s/secret.yaml
 kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/migration-job.yaml
 kubectl apply -f k8s/api-deployment.yaml
 kubectl apply -f k8s/worker-deployment.yaml
 kubectl apply -f k8s/service.yaml
@@ -315,11 +316,16 @@ kubectl apply -f k8s/ingress.yaml
 kubectl apply -f k8s/hpa-api.yaml
 ```
 
+`k8s/migration-job.yaml` запускает `alembic upgrade head` отдельно, а `api-deployment.yaml`
+в Kubernetes запускает только `ai-incident-api`, без повторного применения миграций на каждый pod restart.
+
 ### Helm chart
 
 ```bash
 helm upgrade --install ai-incident-copilot ./helm/ai-incident-copilot
 ```
+
+Helm chart включает hook Job для миграций БД перед `install/upgrade`. При необходимости его можно отключить через `migration.enabled=false`.
 
 Перед деплоем обязательно переопределите:
 

@@ -21,6 +21,7 @@ spec:
         - name: api
           image: ghcr.io/sergeyenikeev/ai-incident-copilot-api:latest
           imagePullPolicy: IfNotPresent
+          command: ["ai-incident-api"]
           ports:
             - containerPort: 8080
               name: http
