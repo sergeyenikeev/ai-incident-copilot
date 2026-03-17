@@ -34,6 +34,8 @@ spec:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           livenessProbe:
             exec:
+              # Worker readiness определяется через файл, потому что у него нет
+              # собственного HTTP health endpoint.
               command: ["python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/tmp/ai-incident-worker.ready').exists() else 1)"]
             initialDelaySeconds: 20
             periodSeconds: 30

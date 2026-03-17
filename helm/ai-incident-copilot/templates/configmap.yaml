@@ -5,6 +5,7 @@ metadata:
   labels:
     {{- include "ai-incident-copilot.labels" . | nindent 4 }}
 data:
+  {{- /* ConfigMap содержит только несекретные параметры runtime. */}}
   APP_ENV: {{ .Values.config.appEnv | quote }}
   APP_DEBUG: {{ .Values.config.appDebug | quote }}
   APP_HOST: {{ .Values.config.appHost | quote }}

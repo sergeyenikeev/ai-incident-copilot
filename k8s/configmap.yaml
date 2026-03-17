@@ -5,6 +5,8 @@ metadata:
   labels:
     app.kubernetes.io/name: ai-incident-copilot
 data:
+  # ConfigMap хранит несекретные runtime-параметры, которые одинаково нужны
+  # и API, и worker deployment'ам.
   APP_ENV: production
   APP_DEBUG: "false"
   APP_HOST: 0.0.0.0

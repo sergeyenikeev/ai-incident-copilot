@@ -7,6 +7,8 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 spec:
+  # Один ingress-маршрут на API достаточно, потому что worker не обслуживает
+  # внешний HTTP-трафик и не должен публиковаться наружу.
   rules:
     - host: ai-incident-copilot.local
       http:

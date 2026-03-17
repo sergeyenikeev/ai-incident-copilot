@@ -1,9 +1,12 @@
 nameOverride: ""
 fullnameOverride: ""
 
+# Список imagePullSecrets оставлен пустым по умолчанию, чтобы chart работал
+# и в открытом, и в приватном registry-сценарии.
 imagePullSecrets: []
 
 config:
+  # Несекретные runtime-параметры приложения.
   appEnv: production
   appDebug: "false"
   appHost: 0.0.0.0
@@ -21,10 +24,13 @@ config:
   topicAnalysisCompleted: incident.analysis.completed
 
 secret:
+  # Значения здесь предназначены для override при deploy и не должны
+  # оставаться дефолтными в реальном окружении.
   postgresUser: incident
   postgresPassword: change-me
 
 api:
+  # API масштабируется отдельно от worker и имеет собственные probe/settings.
   replicaCount: 2
   image:
     repository: ghcr.io/sergeyenikeev/ai-incident-copilot-api
@@ -51,6 +57,8 @@ api:
     periodSeconds: 10
 
 worker:
+  # Worker по умолчанию один, чтобы избежать лишней конкуренции за сообщения
+  # в простом стартовом сценарии.
   replicaCount: 1
   image:
     repository: ghcr.io/sergeyenikeev/ai-incident-copilot-worker
@@ -65,6 +73,7 @@ worker:
       memory: 512Mi
 
 migration:
+  # Отдельный Job для миграций позволяет не связывать rollout API с DDL.
   enabled: true
   backoffLimit: 3
   ttlSecondsAfterFinished: 300
@@ -85,6 +94,8 @@ migration:
       memory: 256Mi
 
 ingress:
+  # Ingress можно полностью отключить, если доступ к API будет идти, например,
+  # через service mesh или внутренний load balancer.
   enabled: true
   className: ""
   annotations:
@@ -97,6 +108,7 @@ ingress:
   tls: []
 
 hpa:
+  # HPA относится только к API deployment.
   enabled: true
   minReplicas: 2
   maxReplicas: 5

@@ -6,6 +6,7 @@ metadata:
     {{- include "ai-incident-copilot.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 spec:
+  # Service публикует только API deployment; worker остаётся внутренним процессом.
   type: {{ .Values.api.service.type }}
   selector:
     app.kubernetes.io/name: {{ include "ai-incident-copilot.name" . }}

@@ -62,6 +62,7 @@
 - описание разработки: [`docs/development.md`](docs/development.md)
 - инфраструктура и деплой: [`docs/infrastructure.md`](docs/infrastructure.md)
 - тестирование: [`docs/testing.md`](docs/testing.md)
+- runbook и сопровождение: [`docs/runbook.md`](docs/runbook.md)
 
 ## Технологический стек
 

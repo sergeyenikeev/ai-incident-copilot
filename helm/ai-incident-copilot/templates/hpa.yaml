@@ -6,6 +6,7 @@ metadata:
   labels:
     {{- include "ai-incident-copilot.labels" . | nindent 4 }}
 spec:
+  # HPA масштабирует только API; worker scaling обычно требует отдельной стратегии.
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
