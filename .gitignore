@@ -16,4 +16,6 @@ build/
 .env.local
 *.log
 *.sqlite3
+*.db
+.tmp/
 alembic/versions/__pycache__/

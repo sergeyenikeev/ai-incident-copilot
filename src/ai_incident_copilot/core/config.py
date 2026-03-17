@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     app_name: str = "ai-incident-copilot"
@@ -30,6 +32,8 @@ class Settings(BaseSettings):
     postgres_db: str = "ai_incident_copilot"
     postgres_user: str = "incident"
     postgres_password: str = "incident"
+    database_url_async_override: str | None = Field(default=None, validation_alias="DATABASE_URL_ASYNC")
+    database_url_sync_override: str | None = Field(default=None, validation_alias="DATABASE_URL_SYNC")
 
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_consumer_group: str = "ai-incident-worker"
@@ -42,6 +46,8 @@ class Settings(BaseSettings):
     def database_url_async(self) -> str:
         """Возвращает DSN для асинхронного подключения к PostgreSQL."""
 
+        if self.database_url_async_override:
+            return self.database_url_async_override
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -51,6 +57,13 @@ class Settings(BaseSettings):
     def database_url_sync(self) -> str:
         """Возвращает DSN для синхронного подключения Alembic."""
 
+        if self.database_url_sync_override:
+            return self.database_url_sync_override
+        if self.database_url_async_override:
+            return (
+                self.database_url_async_override.replace("+asyncpg", "+psycopg")
+                .replace("+aiosqlite", "")
+            )
         return (
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

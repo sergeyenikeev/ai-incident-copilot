@@ -13,11 +13,10 @@ from ai_incident_copilot.api.errors import register_exception_handlers
 from ai_incident_copilot.api.middleware import RequestContextMiddleware
 from ai_incident_copilot.api.routers.health import router as health_router
 from ai_incident_copilot.api.routers.incidents import router as incidents_router
-from ai_incident_copilot.application.services.in_memory_incident_service import (
-    InMemoryIncidentService,
-)
+from ai_incident_copilot.application.services.incident_service import IncidentService
 from ai_incident_copilot.core.config import Settings, get_settings
 from ai_incident_copilot.core.logging import clear_logging_context, configure_logging, get_logger
+from ai_incident_copilot.db.session import DatabaseManager
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -31,9 +30,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         configure_logging(app_settings.app_log_level)
         logger = get_logger(__name__)
+        database_manager = DatabaseManager(app_settings.database_url_async)
 
         app.state.settings = app_settings
-        app.state.incident_service = InMemoryIncidentService()
+        app.state.database_manager = database_manager
+        app.state.incident_service = IncidentService(database_manager.session_factory)
 
         logger.info(
             "API-сервис запускается",
@@ -43,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         yield
         clear_logging_context()
+        await database_manager.dispose()
         logger.info("API-сервис остановлен")
 
     app = FastAPI(

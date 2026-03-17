@@ -3,23 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai_incident_copilot.api.schemas.common import PaginationMeta
-
-
-class IncidentStatus(StrEnum):
-    """Состояния жизненного цикла инцидента."""
-
-    RECEIVED = "received"
-    ANALYSIS_REQUESTED = "analysis_requested"
-    ANALYZING = "analyzing"
-    ANALYZED = "analyzed"
-    FAILED = "failed"
+from ai_incident_copilot.domain.enums import IncidentStatus, SeverityLevel
 
 
 class IncidentCreateRequest(BaseModel):
@@ -42,7 +32,7 @@ class IncidentResponse(BaseModel):
     source: str | None = None
     status: IncidentStatus
     classification: str | None = None
-    severity: str | None = None
+    severity: SeverityLevel | None = None
     recommendation: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -59,7 +49,7 @@ class IncidentSummary(BaseModel):
     source: str | None = None
     status: IncidentStatus
     classification: str | None = None
-    severity: str | None = None
+    severity: SeverityLevel | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -82,7 +72,7 @@ class IncidentFilterParams(BaseModel):
 
     status: IncidentStatus | None = None
     classification: str | None = None
-    severity: str | None = None
+    severity: SeverityLevel | None = None
     source: str | None = None
 
 

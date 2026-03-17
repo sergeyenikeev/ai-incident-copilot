@@ -21,6 +21,7 @@ from ai_incident_copilot.api.schemas.incidents import (
     PaginationMeta,
     PaginationParams,
 )
+from ai_incident_copilot.domain.enums import SeverityLevel
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
@@ -66,7 +67,7 @@ async def list_incidents(
     page_size: int = Query(default=20, ge=1, le=100),
     status_filter: IncidentStatus | None = Query(default=None, alias="status"),
     classification: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
+    severity: SeverityLevel | None = Query(default=None),
     source: str | None = Query(default=None),
 ) -> PaginatedResponse[IncidentListResponse]:
     """Возвращает список инцидентов с пагинацией и фильтрацией."""
