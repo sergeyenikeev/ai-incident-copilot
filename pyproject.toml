@@ -1,0 +1,121 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-incident-copilot"
+version = "0.1.0"
+description = "Сервис обработки инцидентов с FastAPI, PostgreSQL, Kafka и LangGraph."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Sergey Enikeev", email = "s.enikeev@gmail.com" }
+]
+dependencies = [
+  "fastapi>=0.116.0,<1.0.0",
+  "uvicorn[standard]>=0.35.0,<1.0.0",
+  "sqlalchemy[asyncio]>=2.0.38,<3.0.0",
+  "alembic>=1.16.0,<2.0.0",
+  "asyncpg>=0.30.0,<1.0.0",
+  "psycopg[binary]>=3.2.0,<4.0.0",
+  "aiokafka>=0.12.0,<1.0.0",
+  "langgraph>=0.4.0,<1.0.0",
+  "langchain-core>=0.3.0,<1.0.0",
+  "pydantic-settings>=2.8.0,<3.0.0",
+  "python-json-logger>=3.3.0,<4.0.0",
+  "structlog>=25.2.0,<26.0.0",
+  "prometheus-fastapi-instrumentator>=7.1.0,<8.0.0",
+  "orjson>=3.10.0,<4.0.0",
+  "httpx>=0.28.0,<1.0.0",
+  "tenacity>=9.0.0,<10.0.0",
+  "greenlet>=3.2.0,<4.0.0",
+  "typing-extensions>=4.15.0,<5.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/sergeyenikeev/ai-incident-copilot"
+
+[project.scripts]
+ai-incident-api = "ai_incident_copilot.main:main"
+ai-incident-worker = "ai_incident_copilot.worker_main:main"
+
+[dependency-groups]
+dev = [
+  "aiosqlite>=0.21.0,<1.0.0",
+  "asgi-lifespan>=2.1.0,<3.0.0",
+  "faker>=37.0.0,<38.0.0",
+  "mypy>=1.16.0,<2.0.0",
+  "pytest>=8.4.0,<9.0.0",
+  "pytest-asyncio>=1.0.0,<2.0.0",
+  "pytest-cov>=6.1.0,<7.0.0",
+  "pytest-mock>=3.14.0,<4.0.0",
+  "respx>=0.22.0,<1.0.0",
+  "ruff>=0.12.0,<1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_incident_copilot"]
+
+[tool.uv]
+default-groups = ["dev"]
+package = true
+
+[tool.pytest.ini_options]
+addopts = "--cov=src/ai_incident_copilot --cov-report=term-missing --cov-report=xml --cov-fail-under=80"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/ai_incident_copilot"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "N",
+  "UP",
+  "B",
+  "ASYNC",
+  "C4",
+  "DTZ",
+  "G",
+  "PIE",
+  "PT",
+  "RET",
+  "RUF",
+]
+ignore = [
+  "B008",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+mypy_path = ["src"]
+
+[[tool.mypy.overrides]]
+module = [
+  "aiokafka",
+  "aiokafka.*",
+  "langgraph",
+  "langgraph.*",
+]
+ignore_missing_imports = true
