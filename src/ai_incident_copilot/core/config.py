@@ -37,6 +37,10 @@ class Settings(BaseSettings):
 
     kafka_bootstrap_servers: str = "localhost:9092"
     kafka_consumer_group: str = "ai-incident-worker"
+    kafka_enabled: bool = True
+    kafka_fail_fast: bool = False
+    kafka_client_id: str = "ai-incident-api"
+    kafka_request_timeout_ms: int = 10_000
     kafka_topic_incident_created: str = "incident.created"
     kafka_topic_analysis_requested: str = "incident.analysis.requested"
     kafka_topic_analysis_completed: str = "incident.analysis.completed"

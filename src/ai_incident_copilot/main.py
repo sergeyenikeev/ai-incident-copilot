@@ -17,6 +17,7 @@ from ai_incident_copilot.application.services.incident_service import IncidentSe
 from ai_incident_copilot.core.config import Settings, get_settings
 from ai_incident_copilot.core.logging import clear_logging_context, configure_logging, get_logger
 from ai_incident_copilot.db.session import DatabaseManager
+from ai_incident_copilot.events.kafka import build_event_publisher
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -31,10 +32,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         configure_logging(app_settings.app_log_level)
         logger = get_logger(__name__)
         database_manager = DatabaseManager(app_settings.database_url_async)
+        event_publisher = build_event_publisher(app_settings)
+        await event_publisher.start()
 
         app.state.settings = app_settings
         app.state.database_manager = database_manager
-        app.state.incident_service = IncidentService(database_manager.session_factory)
+        app.state.event_publisher = event_publisher
+        app.state.incident_service = IncidentService(
+            database_manager.session_factory,
+            event_publisher,
+        )
 
         logger.info(
             "API-сервис запускается",
@@ -44,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         yield
         clear_logging_context()
+        await event_publisher.stop()
         await database_manager.dispose()
         logger.info("API-сервис остановлен")
 

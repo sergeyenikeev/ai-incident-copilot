@@ -39,6 +39,15 @@ class IncidentEventRepository:
         await self._session.flush()
         return event
 
+    async def mark_published(self, event: IncidentEvent) -> IncidentEvent:
+        """Помечает событие как опубликованное в Kafka."""
+
+        event.status = EventProcessingStatus.PUBLISHED
+        event.processed_at = datetime.now(tz=UTC)
+        event.last_error = None
+        await self._session.flush()
+        return event
+
     async def mark_failed(self, event: IncidentEvent, error_message: str) -> IncidentEvent:
         """Помечает событие как завершившееся ошибкой."""
 

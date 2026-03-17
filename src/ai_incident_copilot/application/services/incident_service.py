@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from math import ceil
-from uuid import UUID
+from uuid import UUID, uuid4
 
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ai_incident_copilot.api.schemas.incidents import (
@@ -15,18 +16,36 @@ from ai_incident_copilot.api.schemas.incidents import (
     IncidentUpdateResponse,
     PaginationParams,
 )
-from ai_incident_copilot.core.logging import get_request_id
-from ai_incident_copilot.db.models import Incident
+from ai_incident_copilot.core.logging import get_logger, get_request_id
+from ai_incident_copilot.db.models import Incident, IncidentEvent
 from ai_incident_copilot.db.repositories.audit import AuditLogRepository
+from ai_incident_copilot.db.repositories.events import IncidentEventRepository
 from ai_incident_copilot.db.repositories.incidents import IncidentRepository
-from ai_incident_copilot.domain.enums import IncidentStatus
+from ai_incident_copilot.domain.enums import (
+    EventProcessingStatus,
+    IncidentEventType,
+    IncidentStatus,
+)
+from ai_incident_copilot.events.kafka import EventPublisher, PublisherUnavailableError
+from ai_incident_copilot.events.schemas import (
+    EventMetadata,
+    IncidentAnalysisRequestedPayload,
+    IncidentCreatedPayload,
+    IncidentEventMessage,
+)
 
 
 class IncidentService:
     """Прикладной сервис CRUD-операций с инцидентами."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        event_publisher: EventPublisher,
+    ) -> None:
         self._session_factory = session_factory
+        self._event_publisher = event_publisher
+        self._logger = get_logger(__name__)
 
     async def create(
         self,
@@ -38,6 +57,7 @@ class IncidentService:
         async with self._session_factory() as session:
             incident_repository = IncidentRepository(session)
             audit_repository = AuditLogRepository(session)
+            event_repository = IncidentEventRepository(session)
 
             if idempotency_key:
                 existing = await incident_repository.get_by_idempotency_key(idempotency_key)
@@ -68,7 +88,20 @@ class IncidentService:
                     "idempotency_key": idempotency_key,
                 },
             )
+            created_event = self._build_created_event(incident)
+            event_record = self._create_event_record(
+                incident=incident,
+                event_type=IncidentEventType.INCIDENT_CREATED,
+                kafka_topic=self._event_publisher.topic_for(IncidentEventType.INCIDENT_CREATED),
+                payload=created_event.model_dump(mode="json"),
+            )
+            event_repository.add(event_record)
             await session.commit()
+            await self._publish_event(
+                session=session,
+                event_record=event_record,
+                event_message=created_event,
+            )
             await session.refresh(incident)
             return self._to_response(incident)
 
@@ -105,6 +138,7 @@ class IncidentService:
         async with self._session_factory() as session:
             incident_repository = IncidentRepository(session)
             audit_repository = AuditLogRepository(session)
+            event_repository = IncidentEventRepository(session)
             incident = await incident_repository.get_by_id(incident_id)
             if incident is None:
                 return None
@@ -121,9 +155,112 @@ class IncidentService:
                 request_id=get_request_id(),
                 payload={"status": incident.status.value},
             )
+            analysis_requested_event = self._build_analysis_requested_event(incident)
+            event_record = self._create_event_record(
+                incident=incident,
+                event_type=IncidentEventType.ANALYSIS_REQUESTED,
+                kafka_topic=self._event_publisher.topic_for(IncidentEventType.ANALYSIS_REQUESTED),
+                payload=analysis_requested_event.model_dump(mode="json"),
+            )
+            event_repository.add(event_record)
             await session.commit()
+            await self._publish_event(
+                session=session,
+                event_record=event_record,
+                event_message=analysis_requested_event,
+            )
             await session.refresh(incident)
             return self._to_response(incident)
+
+    async def _publish_event(
+        self,
+        *,
+        session: AsyncSession,
+        event_record: IncidentEvent,
+        event_message: BaseModel,
+    ) -> None:
+        event_repository = IncidentEventRepository(session)
+        try:
+            await self._event_publisher.publish(
+                topic=event_record.kafka_topic,
+                key=event_record.event_key,
+                message=event_message,
+            )
+        except PublisherUnavailableError as exc:
+            self._logger.warning(
+                "Kafka publisher недоступен, событие сохранено для повторной отправки",
+                incident_id=str(event_record.incident_id),
+                event_type=event_record.event_type.value,
+                event_id=str(event_record.id),
+                error=str(exc),
+            )
+            await event_repository.mark_failed(event_record, str(exc))
+        except Exception as exc:
+            self._logger.exception(
+                "Не удалось опубликовать событие в Kafka",
+                incident_id=str(event_record.incident_id),
+                event_type=event_record.event_type.value,
+                event_id=str(event_record.id),
+            )
+            await event_repository.mark_failed(event_record, str(exc))
+        else:
+            await event_repository.mark_published(event_record)
+        finally:
+            await session.commit()
+
+    @staticmethod
+    def _create_event_record(
+        *,
+        incident: Incident,
+        event_type: IncidentEventType,
+        kafka_topic: str,
+        payload: dict[str, object],
+    ) -> IncidentEvent:
+        event_id = uuid4()
+        return IncidentEvent(
+            id=event_id,
+            incident_id=incident.id,
+            event_type=event_type,
+            kafka_topic=kafka_topic,
+            event_key=str(incident.id),
+            status=EventProcessingStatus.PENDING,
+            idempotency_key=str(event_id),
+            payload=payload,
+        )
+
+    @staticmethod
+    def _build_created_event(
+        incident: Incident,
+    ) -> IncidentEventMessage[IncidentCreatedPayload]:
+        return IncidentEventMessage(
+            metadata=EventMetadata(
+                event_id=uuid4(),
+                event_type=IncidentEventType.INCIDENT_CREATED,
+                incident_id=incident.id,
+                request_id=get_request_id(),
+            ),
+            payload=IncidentCreatedPayload(
+                title=incident.title,
+                description=incident.description,
+                source=incident.source,
+                status=incident.status,
+                metadata=incident.payload_metadata,
+            ),
+        )
+
+    @staticmethod
+    def _build_analysis_requested_event(
+        incident: Incident,
+    ) -> IncidentEventMessage[IncidentAnalysisRequestedPayload]:
+        return IncidentEventMessage(
+            metadata=EventMetadata(
+                event_id=uuid4(),
+                event_type=IncidentEventType.ANALYSIS_REQUESTED,
+                incident_id=incident.id,
+                request_id=get_request_id(),
+            ),
+            payload=IncidentAnalysisRequestedPayload(status=incident.status),
+        )
 
     @staticmethod
     def _to_response(incident: Incident) -> IncidentResponse:
