@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import cast
 
 from aiokafka import AIOKafkaConsumer, ConsumerRecord
 
@@ -42,6 +43,11 @@ class KafkaEventConsumer:
 
         async for message in self._consumer:
             yield message
+
+    async def getmany(self, timeout_ms: int) -> dict[object, list[ConsumerRecord]]:
+        """Возвращает пачку сообщений с таймаутом polling."""
+
+        return cast(dict[object, list[ConsumerRecord]], await self._consumer.getmany(timeout_ms=timeout_ms))
 
     async def commit(self) -> None:
         """Подтверждает обработанные offset'ы."""

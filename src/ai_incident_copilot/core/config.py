@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     kafka_topic_analysis_requested: str = "incident.analysis.requested"
     kafka_topic_analysis_completed: str = "incident.analysis.completed"
     kafka_max_retries: int = 3
+    worker_poll_timeout_ms: int = 1_000
+    worker_retry_backoff_seconds: float = 1.5
 
     @property
     def database_url_async(self) -> str:

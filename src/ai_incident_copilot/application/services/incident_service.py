@@ -91,6 +91,7 @@ class IncidentService:
             created_event = self._build_created_event(incident)
             event_record = self._create_event_record(
                 incident=incident,
+                event_id=created_event.metadata.event_id,
                 event_type=IncidentEventType.INCIDENT_CREATED,
                 kafka_topic=self._event_publisher.topic_for(IncidentEventType.INCIDENT_CREATED),
                 payload=created_event.model_dump(mode="json"),
@@ -158,6 +159,7 @@ class IncidentService:
             analysis_requested_event = self._build_analysis_requested_event(incident)
             event_record = self._create_event_record(
                 incident=incident,
+                event_id=analysis_requested_event.metadata.event_id,
                 event_type=IncidentEventType.ANALYSIS_REQUESTED,
                 kafka_topic=self._event_publisher.topic_for(IncidentEventType.ANALYSIS_REQUESTED),
                 payload=analysis_requested_event.model_dump(mode="json"),
@@ -212,11 +214,11 @@ class IncidentService:
     def _create_event_record(
         *,
         incident: Incident,
+        event_id: UUID,
         event_type: IncidentEventType,
         kafka_topic: str,
         payload: dict[str, object],
     ) -> IncidentEvent:
-        event_id = uuid4()
         return IncidentEvent(
             id=event_id,
             incident_id=incident.id,
