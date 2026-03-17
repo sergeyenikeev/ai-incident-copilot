@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 
@@ -13,6 +14,19 @@ def test_health_endpoint_returns_dependency_checks(client) -> None:
     assert payload["data"]["checks"]["api"] == "ok"
     assert payload["data"]["checks"]["database"] == "ok"
     assert payload["data"]["checks"]["kafka"] == "disabled"
+
+
+def test_health_endpoint_returns_degraded_when_dependency_fails(client) -> None:
+    client.app.state.database_manager.check_health = AsyncMock(side_effect=RuntimeError("db unavailable"))
+    client.app.state.event_publisher.health_status = AsyncMock(return_value="error")
+
+    response = client.get("/health")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["data"]["status"] == "degraded"
+    assert payload["data"]["checks"]["database"] == "error"
+    assert payload["data"]["checks"]["kafka"] == "error"
 
 
 def test_incident_crud_and_filters(client) -> None:
