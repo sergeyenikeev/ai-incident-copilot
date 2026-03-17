@@ -1,4 +1,8 @@
-"""Конфигурация приложения."""
+"""Конфигурация приложения.
+
+Модуль задаёт единый слой доступа к env-конфигурации для API, worker,
+миграций, тестов и инфраструктурных окружений.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Глобальные настройки, загружаемые из переменных окружения."""
+    """Глобальные настройки, загружаемые из переменных окружения.
+
+    Все ключевые параметры системы сведены в один объект, чтобы:
+
+    - избежать разрозненного чтения `os.environ`
+    - упростить тестовые override
+    - сделать контракт окружения явным для Docker/Kubernetes/CI
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -51,7 +62,11 @@ class Settings(BaseSettings):
 
     @property
     def database_url_async(self) -> str:
-        """Возвращает DSN для асинхронного подключения к PostgreSQL."""
+        """Возвращает DSN для асинхронного подключения к PostgreSQL.
+
+        Override-поле полезно для тестов и нестандартных окружений, где DSN
+        удобнее передавать целиком, а не собирать из отдельных частей.
+        """
 
         if self.database_url_async_override:
             return self.database_url_async_override
@@ -62,7 +77,11 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """Возвращает DSN для синхронного подключения Alembic."""
+        """Возвращает DSN для синхронного подключения Alembic.
+
+        Alembic использует синхронный драйвер, поэтому async URL при необходимости
+        адаптируется в sync-вариант автоматически.
+        """
 
         if self.database_url_sync_override:
             return self.database_url_sync_override
@@ -79,6 +98,10 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Возвращает кэшированный экземпляр настроек."""
+    """Возвращает кэшированный экземпляр настроек.
+
+    Кэш нужен, чтобы приложение не парсило env повторно при каждом обращении
+    к dependency. В тестах кэш можно безопасно сбрасывать через `cache_clear()`.
+    """
 
     return Settings()

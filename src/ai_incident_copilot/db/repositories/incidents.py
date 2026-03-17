@@ -1,4 +1,9 @@
-"""Репозиторий инцидентов."""
+"""Репозиторий инцидентов.
+
+Репозиторий инкапсулирует низкоуровневые SQLAlchemy-запросы к таблице
+`incidents`, чтобы прикладной сервис работал уже не с SQL, а с понятными
+операциями предметной области.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +19,11 @@ from ai_incident_copilot.db.models import Incident
 
 
 class IncidentRepository:
-    """Работает с таблицей incidents."""
+    """Работает с таблицей incidents.
+
+    Здесь сосредоточены только операции чтения/записи по самой сущности
+    инцидента, без аудита, событий и внешних интеграций.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -41,7 +50,11 @@ class IncidentRepository:
         pagination: PaginationParams,
         filters: IncidentFilterParams,
     ) -> tuple[Sequence[Incident], int]:
-        """Возвращает страницу инцидентов и их общее количество."""
+        """Возвращает страницу инцидентов и их общее количество.
+
+        Count и page-запрос разделены осознанно: API нужен общий `total`,
+        а значит пагинация должна уметь считать данные независимо от `limit`.
+        """
 
         base_stmt = self._apply_filters(select(Incident), filters)
         count_stmt = select(func.count()).select_from(base_stmt.subquery())
@@ -60,6 +73,8 @@ class IncidentRepository:
         stmt: Select[tuple[Incident]],
         filters: IncidentFilterParams,
     ) -> Select[tuple[Incident]]:
+        """Накладывает фильтры списка на базовый SQLAlchemy statement."""
+
         if filters.status:
             stmt = stmt.where(Incident.status == filters.status)
         if filters.classification:

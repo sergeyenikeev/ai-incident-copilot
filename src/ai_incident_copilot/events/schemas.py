@@ -1,4 +1,8 @@
-"""Типизированные схемы событий Kafka."""
+"""Типизированные схемы событий Kafka.
+
+Этот модуль задаёт контракт обмена между API, worker и потенциальными
+внешними потребителями. Именно здесь фиксируется форма доменных событий.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,11 @@ from ai_incident_copilot.domain.enums import IncidentEventType, IncidentStatus, 
 
 
 class EventMetadata(BaseModel):
-    """Метаданные Kafka-сообщения."""
+    """Метаданные Kafka-сообщения.
+
+    Метаданные отделены от payload, чтобы служебные поля вроде `event_id`,
+    `request_id` и `workflow_run_id` жили единообразно для всех типов событий.
+    """
 
     event_id: UUID
     event_type: IncidentEventType
@@ -49,7 +57,11 @@ class IncidentAnalysisCompletedPayload(BaseModel):
 
 
 class IncidentEventMessage[PayloadT](BaseModel):
-    """Типизированное доменное событие инцидента."""
+    """Типизированное доменное событие инцидента.
+
+    Generic-обёртка позволяет использовать единый формат события и при этом
+    сохранять строгую типизацию payload для каждого event type.
+    """
 
     metadata: EventMetadata
     payload: PayloadT

@@ -60,6 +60,7 @@
 - workflow: [`docs/workflow.md`](docs/workflow.md)
 - модули проекта: [`docs/modules.md`](docs/modules.md)
 - описание разработки: [`docs/development.md`](docs/development.md)
+- инфраструктура и деплой: [`docs/infrastructure.md`](docs/infrastructure.md)
 
 ## Технологический стек
 

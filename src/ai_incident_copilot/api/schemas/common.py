@@ -1,4 +1,8 @@
-"""Общие схемы API."""
+"""Общие схемы API.
+
+Модуль задаёт универсальный формат успешных и ошибочных ответов. Это позволяет
+всем endpoint'ам возвращать предсказуемую структуру независимо от payload.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResponseEnvelope[PayloadT](BaseModel):
-    """Унифицированный ответ с полезной нагрузкой."""
+    """Унифицированный ответ с полезной нагрузкой.
+
+    Обёртка `data` делает контракт API стабильнее: в ответ всегда можно
+    добавить метаданные рядом, не ломая форму полезной нагрузки.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,7 +42,15 @@ class PaginatedResponse[PayloadT](BaseModel):
 
 
 class ErrorInfo(BaseModel):
-    """Описание ошибки API."""
+    """Описание ошибки API.
+
+    Здесь лежит всё, что нужно клиенту для машинной и человеческой обработки:
+
+    - код ошибки
+    - сообщение
+    - request_id
+    - дополнительные детали
+    """
 
     code: str
     message: str

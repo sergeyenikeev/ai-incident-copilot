@@ -6,6 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Системные зависимости идентичны API-образу, чтобы runtime worker мог
+# использовать тот же код приложения и зависимости БД.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -21,4 +23,5 @@ RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
+# Worker стартует отдельным процессом и не обслуживает HTTP-трафик.
 CMD ["ai-incident-worker"]

@@ -19,6 +19,7 @@ services:
   kafka:
     image: bitnami/kafka:3.9
     container_name: ai-incident-kafka
+    # Локальный single-node Kafka в KRaft-режиме без внешнего ZooKeeper.
     environment:
       KAFKA_CFG_NODE_ID: "0"
       KAFKA_CFG_PROCESS_ROLES: controller,broker
@@ -43,6 +44,8 @@ services:
       context: .
       dockerfile: Dockerfile.api
     container_name: ai-incident-api
+    # API ждёт доступности Postgres и старта Kafka, чтобы bootstrap был
+    # максимально близок к реальному окружению.
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,6 +70,7 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     container_name: ai-incident-worker
+    # Worker стартует отдельно от API и читает события из того же Kafka broker.
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,4 +87,5 @@ services:
       KAFKA_ENABLED: "true"
 
 volumes:
+  # Именованный volume сохраняет данные PostgreSQL между перезапусками compose.
   postgres_data:

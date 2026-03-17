@@ -1,4 +1,8 @@
-"""Схемы запросов и ответов для инцидентов."""
+"""Схемы запросов и ответов для инцидентов.
+
+Это API-контракт вокруг основной сущности проекта. Схемы отделены от ORM,
+чтобы transport-модель можно было эволюционировать независимо от таблиц БД.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +17,11 @@ from ai_incident_copilot.domain.enums import IncidentStatus, SeverityLevel
 
 
 class IncidentCreateRequest(BaseModel):
-    """Запрос на создание инцидента."""
+    """Запрос на создание инцидента.
+
+    Ограничения длины полей служат не только валидации, но и защите от
+    слишком коротких или слишком шумных сообщений на входе.
+    """
 
     title: str = Field(min_length=3, max_length=255)
     description: str = Field(min_length=10, max_length=10_000)
@@ -77,7 +85,11 @@ class IncidentFilterParams(BaseModel):
 
 
 class IncidentUpdateResponse(BaseModel):
-    """Внутреннее представление результатов пагинации."""
+    """Внутреннее представление результатов пагинации.
+
+    Эта модель живёт внутри service/repository-слоя и помогает не смешивать
+    внутреннюю форму пагинации с внешним HTTP-конвертом.
+    """
 
     items: list[IncidentSummary]
     total: int

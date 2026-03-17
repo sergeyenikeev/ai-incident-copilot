@@ -1,4 +1,10 @@
-"""Репозитории workflow-сущностей."""
+"""Репозитории workflow-сущностей.
+
+Модуль разделяет две близкие, но разные сущности:
+
+- `WorkflowRun`: один запуск анализа целиком
+- `WorkflowStep`: отдельный шаг внутри запуска
+"""
 
 from __future__ import annotations
 
@@ -14,7 +20,11 @@ from ai_incident_copilot.domain.enums import WorkflowRunStatus, WorkflowStepStat
 
 
 class WorkflowRunRepository:
-    """Работает с workflow_runs."""
+    """Работает с workflow_runs.
+
+    Репозиторий описывает жизненный цикл запуска workflow на уровне всего run,
+    без детализации по node execution.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -64,7 +74,11 @@ class WorkflowRunRepository:
 
 
 class WorkflowStepRepository:
-    """Работает с workflow_steps."""
+    """Работает с workflow_steps.
+
+    Нужен для поузловой трассировки выполнения LangGraph и последующего
+    расследования инцидентов на уровне конкретного шага.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session

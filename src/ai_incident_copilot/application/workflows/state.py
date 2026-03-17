@@ -1,4 +1,8 @@
-"""Типы состояния для workflow анализа инцидента."""
+"""Типы состояния для workflow анализа инцидента.
+
+Здесь описывается контракт между узлами LangGraph. Это отдельный модуль, чтобы
+структура workflow-state была явно видна и не размазывалась по orchestration-коду.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +15,11 @@ from ai_incident_copilot.domain.enums import SeverityLevel
 
 
 class IncidentWorkflowState(TypedDict, total=False):
-    """Состояние исполнения LangGraph workflow."""
+    """Состояние исполнения LangGraph workflow.
+
+    `TypedDict` удобен тем, что state остаётся обычным словарём для LangGraph,
+    но при этом IDE и type checker понимают ожидаемые поля.
+    """
 
     incident_id: str
     workflow_run_id: str
@@ -27,7 +35,12 @@ class IncidentWorkflowState(TypedDict, total=False):
 
 
 class IncidentWorkflowResult(BaseModel):
-    """Результат выполнения workflow анализа."""
+    """Результат выполнения workflow анализа.
+
+    Это уже не промежуточное состояние графа, а нормализованный итог,
+    который удобно возвращать worker-слою и использовать для публикации события
+    `incident.analysis.completed`.
+    """
 
     incident_id: UUID
     workflow_run_id: UUID

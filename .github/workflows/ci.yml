@@ -13,6 +13,8 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    # Основной quality gate: статический анализ и тесты должны пройти
+    # прежде, чем мы перейдём к сборке и публикации контейнеров.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Публикация образов выполняется только после зелёного quality gate
+    # и только для основной ветки.
     steps:
       - name: Checkout
         uses: actions/checkout@v4

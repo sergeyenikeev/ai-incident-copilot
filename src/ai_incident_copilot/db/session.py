@@ -1,4 +1,14 @@
-"""Инициализация SQLAlchemy и управление сессиями."""
+"""Инициализация SQLAlchemy и управление сессиями.
+
+Модуль концентрирует всё, что связано с жизненным циклом подключения к БД:
+
+- создание async engine
+- создание session factory
+- healthcheck
+- корректное закрытие ресурсов
+
+Это позволяет остальным модулям не знать деталей настройки SQLAlchemy.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +24,11 @@ from ai_incident_copilot.db.base import Base
 
 
 class DatabaseManager:
-    """Управляет async engine и фабрикой сессий."""
+    """Управляет async engine и фабрикой сессий.
+
+    Объект создаётся один раз на процесс и затем переиспользуется API или
+    worker-слоем. Это дешевле и надёжнее, чем создавать engine по месту.
+    """
 
     def __init__(self, database_url: str) -> None:
         self._engine: AsyncEngine = create_async_engine(
@@ -41,7 +55,11 @@ class DatabaseManager:
         return self._session_factory
 
     async def check_health(self) -> None:
-        """Проверяет доступность базы данных."""
+        """Проверяет доступность базы данных.
+
+        Вызывается из `/health` и intentionally выполняет самый дешёвый
+        возможный запрос, чтобы не нагружать БД лишней логикой.
+        """
 
         async with self._session_factory() as session:
             await session.execute(text("SELECT 1"))

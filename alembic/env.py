@@ -1,4 +1,11 @@
-"""Конфигурация Alembic."""
+"""Конфигурация Alembic.
+
+Этот модуль соединяет миграции Alembic с приложением:
+
+- подтягивает DSN из `Settings`
+- импортирует metadata ORM-моделей
+- запускает offline/online миграции
+"""
 
 from __future__ import annotations
 
@@ -18,11 +25,16 @@ config.set_main_option("sqlalchemy.url", settings.database_url_sync)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# Alembic сравнивает именно эту metadata с текущим состоянием БД при
+# autogenerate и выполнении миграций.
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Запускает миграции в offline-режиме."""
+    """Запускает миграции в offline-режиме.
+
+    В этом режиме Alembic генерирует SQL без живого подключения к БД.
+    """
 
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -38,7 +50,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Запускает миграции с реальным соединением к базе."""
+    """Запускает миграции с реальным соединением к базе.
+
+    Это основной сценарий для локального запуска, CI, Docker и Kubernetes job.
+    """
 
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),

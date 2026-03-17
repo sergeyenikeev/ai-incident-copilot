@@ -6,12 +6,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Системные зависимости нужны для сборки Python-пакетов и работы с PostgreSQL.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv==0.10.11
 
+# Сначала копируем только файлы зависимостей и исходники приложения, чтобы
+# сборка оставалась воспроизводимой и предсказуемой.
 COPY pyproject.toml uv.lock README.md ./
 COPY alembic.ini ./
 COPY alembic ./alembic
@@ -23,4 +26,6 @@ ENV PATH="/app/.venv/bin:${PATH}"
 
 EXPOSE 8080
 
+# В Docker Compose API сам применяет миграции перед стартом процесса.
+# Для Kubernetes миграции вынесены в отдельный Job.
 CMD ["sh", "-lc", "alembic upgrade head && ai-incident-api"]

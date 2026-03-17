@@ -361,6 +361,89 @@ runtime-потоку:
 
 Эти enum'ы важны, потому что задают словарь состояний всей системы.
 
+## Миграции и служебные каталоги
+
+### `alembic/env.py`
+
+Связывает Alembic с приложением и ORM-моделями.
+
+Что делает:
+
+- читает DSN из `Settings`
+- подключает `Base.metadata`
+- запускает online/offline миграции
+
+### `alembic/versions/`
+
+Здесь лежат конкретные миграции схемы БД.
+
+Это история эволюции структуры данных проекта.
+
+## Тестовая структура
+
+### `tests/conftest.py`
+
+Общий bootstrap тестов:
+
+- временная SQLite-база
+- применение миграций
+- создание `TestClient`
+- общие fixtures
+
+### `tests/unit/`
+
+Содержит быстрые тесты изолированной логики:
+
+- workflow
+- сервисы
+- Kafka-обвязка
+- entrypoint'ы
+
+### `tests/integration/`
+
+Содержит сценарии, где вместе проверяются несколько слоёв:
+
+- HTTP API
+- БД
+- worker flow
+
+## Инфраструктурные файлы
+
+### `Dockerfile.api`
+
+Собирает runtime-образ API-сервиса.
+
+### `Dockerfile.worker`
+
+Собирает runtime-образ worker-сервиса.
+
+### `docker-compose.yml`
+
+Поднимает локальный контур из:
+
+- PostgreSQL
+- Kafka
+- API
+- worker
+
+### `.github/workflows/ci.yml`
+
+Описывает CI/CD pipeline:
+
+- lint
+- type-check
+- tests
+- upload coverage
+- build/push Docker images
+
+### `k8s/`
+
+Plain Kubernetes manifests для базового деплоя.
+
+### `helm/ai-incident-copilot/`
+
+Helm chart для более управляемого и параметризуемого деплоя.
+
 ## Модули верхнего уровня
 
 ### `main.py`

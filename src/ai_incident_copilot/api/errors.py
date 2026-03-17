@@ -1,4 +1,13 @@
-"""Обработчики ошибок API."""
+"""Глобальная обработка ошибок API.
+
+Модуль нужен для двух целей:
+
+- приводить ошибки к единому JSON-контракту
+- логировать сбои единообразно и с request context
+
+Благодаря этому клиент получает предсказуемый формат ошибки, а не случайный
+stack trace или разные формы ответов для разных исключений.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +23,11 @@ from ai_incident_copilot.core.logging import get_logger, get_request_id
 
 
 class ApplicationError(Exception):
-    """Прикладная ошибка с управляемым HTTP-ответом."""
+    """Прикладная ошибка с управляемым HTTP-ответом.
+
+    Используется для бизнес-ситуаций, когда сервис осознанно хочет вернуть
+    конкретный статус и machine-readable `error_code`.
+    """
 
     def __init__(
         self,
@@ -32,7 +45,11 @@ class ApplicationError(Exception):
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Регистрирует глобальные обработчики исключений."""
+    """Регистрирует глобальные обработчики исключений.
+
+    Обработчики определены внутри функции, чтобы замкнуть экземпляр logger
+    и зарегистрировать всё в одном месте на этапе сборки приложения.
+    """
 
     logger = get_logger(__name__)
 
@@ -61,6 +78,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        # Validation error остаётся клиентской ошибкой: мы не скрываем факт,
+        # что запрос некорректен, и возвращаем детали валидации в `details`.
         details = {"errors": exc.errors()}
         _log_failure(
             logger,
@@ -82,6 +101,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: HTTPException,
     ) -> JSONResponse:
+        # HTTPException обычно приходит из FastAPI/Starlette и уже несёт
+        # семантический status code, который важно сохранить.
         details = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
         _log_failure(
             logger,
@@ -103,6 +124,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
+        # В неожиданных ошибках наружу отдаётся безопасное обобщённое сообщение,
+        # а технические детали остаются в логах.
         _log_failure(
             logger,
             request=request,
@@ -127,6 +150,8 @@ def _build_error_response(
     status_code: int,
     details: dict[str, Any],
 ) -> JSONResponse:
+    """Строит унифицированный JSON-ответ с ошибкой."""
+
     payload = ErrorEnvelope(
         error=ErrorInfo(
             code=error_code,
@@ -148,6 +173,12 @@ def _log_failure(
     details: dict[str, Any],
     exc: Exception | None = None,
 ) -> None:
+    """Логирует ошибку в структурированном формате.
+
+    В лог обязательно попадают путь, метод, `error_code` и `status_code`,
+    чтобы по логам можно было быстро понять природу сбоя без ручной реконструкции.
+    """
+
     log = logger.bind(
         path=request.url.path,
         method=request.method,

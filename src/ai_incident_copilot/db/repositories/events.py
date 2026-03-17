@@ -1,4 +1,8 @@
-"""Репозиторий событий инцидентов."""
+"""Репозиторий событий инцидентов.
+
+Это один из самых важных infrastructure-модулей проекта, потому что именно он
+управляет состоянием event journal в таблице `incident_events`.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +17,12 @@ from ai_incident_copilot.domain.enums import EventProcessingStatus
 
 
 class IncidentEventRepository:
-    """Работает с таблицей incident_events."""
+    """Работает с таблицей incident_events.
+
+    Через этот репозиторий код API и worker синхронизирует, что именно
+    произошло с событием: создано, опубликовано, обработано или завершилось
+    ошибкой.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -49,7 +58,11 @@ class IncidentEventRepository:
         return event
 
     async def mark_failed(self, event: IncidentEvent, error_message: str) -> IncidentEvent:
-        """Помечает событие как завершившееся ошибкой."""
+        """Помечает событие как завершившееся ошибкой.
+
+        `retry_count` увеличивается здесь же, чтобы счётчик повторов жил рядом
+        с самим состоянием события и не требовал отдельной таблицы.
+        """
 
         event.status = EventProcessingStatus.FAILED
         event.last_error = error_message

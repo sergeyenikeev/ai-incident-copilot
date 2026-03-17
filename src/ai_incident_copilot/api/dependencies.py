@@ -1,4 +1,9 @@
-"""Зависимости FastAPI."""
+"""DI-зависимости FastAPI.
+
+Модуль нужен для того, чтобы transport-слой не создавал сервисы и
+инфраструктурные объекты вручную. Все long-lived зависимости заранее кладутся
+в `app.state` на этапе lifespan, а этот модуль аккуратно достаёт их оттуда.
+"""
 
 from __future__ import annotations
 
@@ -13,13 +18,21 @@ from ai_incident_copilot.events.kafka import EventPublisher
 
 
 def get_app_settings() -> Settings:
-    """Возвращает singleton-конфигурацию приложения."""
+    """Возвращает singleton-конфигурацию приложения.
+
+    Настройки читаются централизованно через `get_settings`, чтобы все части
+    приложения опирались на один и тот же объект конфигурации.
+    """
 
     return get_settings()
 
 
 def get_incident_service(request: Request) -> IncidentService:
-    """Возвращает сервис обработки инцидентов из состояния приложения."""
+    """Возвращает сервис обработки инцидентов из состояния приложения.
+
+    Здесь нет создания нового сервиса на запрос: мы берём уже собранный объект,
+    который был инициализирован при старте FastAPI-процесса.
+    """
 
     return cast(IncidentService, request.app.state.incident_service)
 
@@ -39,11 +52,17 @@ def get_event_publisher(request: Request) -> EventPublisher:
 def get_idempotency_key(
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> str | None:
-    """Извлекает ключ идемпотентности из заголовка запроса."""
+    """Извлекает ключ идемпотентности из заголовка запроса.
+
+    Отдельная dependency делает обработку заголовка явной и переиспользуемой,
+    а роутерам не нужно вручную читать `request.headers`.
+    """
 
     return idempotency_key
 
 
+# Псевдонимы на базе `Annotated` делают сигнатуры роутеров компактнее и
+# одновременно сохраняют строгую типизацию зависимостей.
 SettingsDependency = Annotated[Settings, Depends(get_app_settings)]
 IncidentServiceDependency = Annotated[
     IncidentService,
