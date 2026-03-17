@@ -60,6 +60,8 @@
 - workflow: [`docs/workflow.md`](docs/workflow.md)
 - модули проекта: [`docs/modules.md`](docs/modules.md)
 - описание разработки: [`docs/development.md`](docs/development.md)
+- архитектурные решения: [`docs/decisions.md`](docs/decisions.md)
+- модель данных: [`docs/data-model.md`](docs/data-model.md)
 - инфраструктура и деплой: [`docs/infrastructure.md`](docs/infrastructure.md)
 - тестирование: [`docs/testing.md`](docs/testing.md)
 - runbook и сопровождение: [`docs/runbook.md`](docs/runbook.md)

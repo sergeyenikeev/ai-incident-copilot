@@ -200,3 +200,8 @@ JSON-логи содержат:
 - Helm: hook Job `pre-install,pre-upgrade`
 
 Это позволяет не выполнять `alembic upgrade head` при каждом рестарте API-pod и упрощает rollout.
+
+Дополнительно:
+
+- подробная модель хранения: `docs/data-model.md`
+- ключевые архитектурные решения: `docs/decisions.md`
