@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from structlog.stdlib import BoundLogger
 
 from ai_incident_copilot.api.schemas.common import ErrorEnvelope, ErrorInfo
@@ -40,7 +40,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_application_error(
         request: Request,
         exc: ApplicationError,
-    ) -> ORJSONResponse:
+    ) -> JSONResponse:
         _log_failure(
             logger,
             request=request,
@@ -60,20 +60,20 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_validation_error(
         request: Request,
         exc: RequestValidationError,
-    ) -> ORJSONResponse:
+    ) -> JSONResponse:
         details = {"errors": exc.errors()}
         _log_failure(
             logger,
             request=request,
             message="Ошибка валидации запроса",
             error_code="validation_error",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             details=details,
         )
         return _build_error_response(
             message="Запрос не прошёл валидацию",
             error_code="validation_error",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             details=details,
         )
 
@@ -81,7 +81,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_http_exception(
         request: Request,
         exc: HTTPException,
-    ) -> ORJSONResponse:
+    ) -> JSONResponse:
         details = exc.detail if isinstance(exc.detail, dict) else {"detail": exc.detail}
         _log_failure(
             logger,
@@ -102,7 +102,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_unexpected_error(
         request: Request,
         exc: Exception,
-    ) -> ORJSONResponse:
+    ) -> JSONResponse:
         _log_failure(
             logger,
             request=request,
@@ -126,7 +126,7 @@ def _build_error_response(
     error_code: str,
     status_code: int,
     details: dict[str, Any],
-) -> ORJSONResponse:
+) -> JSONResponse:
     payload = ErrorEnvelope(
         error=ErrorInfo(
             code=error_code,
@@ -135,7 +135,7 @@ def _build_error_response(
             details=details,
         )
     )
-    return ORJSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
+    return JSONResponse(status_code=status_code, content=payload.model_dump(mode="json"))
 
 
 def _log_failure(
