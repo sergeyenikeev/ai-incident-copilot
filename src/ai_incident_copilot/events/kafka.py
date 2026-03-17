@@ -1,4 +1,13 @@
-"""Kafka producer и общие интерфейсы публикации событий."""
+"""Kafka publisher и абстракции публикации событий.
+
+Модуль решает две задачи:
+
+- задаёт единый контракт публикации событий для прикладного слоя
+- инкапсулирует детали работы с `aiokafka`
+
+Благодаря этому API, worker и тесты работают через один и тот же интерфейс,
+а конкретная реализация выбирается из конфигурации.
+"""
 
 from __future__ import annotations
 
@@ -36,7 +45,11 @@ class EventPublisher(Protocol):
 
 
 class KafkaEventPublisher:
-    """Асинхронный publisher событий в Kafka."""
+    """Асинхронный publisher событий в Kafka.
+
+    Объект живёт на уровне процесса и переиспользует одно подключение
+    к Kafka вместо создания producer на каждый вызов публикации.
+    """
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -45,7 +58,12 @@ class KafkaEventPublisher:
         self._start_error: str | None = None
 
     async def start(self) -> None:
-        """Поднимает соединение с Kafka."""
+        """Поднимает соединение с Kafka.
+
+        Если `kafka_fail_fast=false`, то ошибка подключения не роняет процесс
+        немедленно: сервис продолжит работать в degraded-режиме, а healthcheck
+        покажет проблему через статус publisher.
+        """
 
         if self._producer is not None:
             return
@@ -79,7 +97,11 @@ class KafkaEventPublisher:
         self._producer = None
 
     async def publish(self, *, topic: str, key: str, message: BaseModel) -> None:
-        """Публикует событие в Kafka."""
+        """Публикует событие в Kafka.
+
+        Метод получает уже валидированную Pydantic-модель события и сам
+        преобразует её в JSON-строку перед отправкой в broker.
+        """
 
         if self._producer is None:
             raise PublisherUnavailableError(self._start_error or "Kafka producer не инициализирован")
@@ -93,7 +115,14 @@ class KafkaEventPublisher:
         )
 
     async def health_status(self) -> str:
-        """Возвращает состояние producer."""
+        """Возвращает состояние producer.
+
+        Используется маршрутом `/health`, чтобы оператор видел разницу между:
+
+        - `ok`: producer поднят
+        - `starting`: producer ещё не успел стартовать
+        - `error`: старт закончился ошибкой
+        """
 
         if self._producer is not None and self._start_error is None:
             return "ok"
@@ -113,7 +142,11 @@ class KafkaEventPublisher:
 
 
 class NoOpEventPublisher:
-    """Заглушка publisher для локального режима и тестов без Kafka."""
+    """Заглушка publisher для локального режима и тестов без Kafka.
+
+    Эта реализация сохраняет единый контракт `EventPublisher`, но не требует
+    живого Kafka broker. Благодаря ей тесты и локальная разработка проще.
+    """
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -154,7 +187,11 @@ class NoOpEventPublisher:
 
 
 def build_event_publisher(settings: Settings) -> EventPublisher:
-    """Создаёт подходящий publisher в зависимости от конфигурации."""
+    """Создаёт подходящий publisher в зависимости от конфигурации.
+
+    Это точка выбора между реальной интеграцией с Kafka и безопасной
+    заглушкой для окружений, где брокер не нужен или недоступен.
+    """
 
     if settings.kafka_enabled:
         return KafkaEventPublisher(settings)

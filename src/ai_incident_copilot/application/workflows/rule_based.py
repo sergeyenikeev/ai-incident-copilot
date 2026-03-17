@@ -1,4 +1,14 @@
-"""Rule-based анализатор инцидентов для начальной версии workflow."""
+"""Rule-based анализатор инцидентов для начальной версии workflow.
+
+Этот модуль intentionally прост: он даёт рабочую, детерминированную и
+полностью тестируемую логику анализа без внешнего LLM.
+
+Его роль в архитектуре:
+
+- быть текущим "мозгом" workflow
+- задавать стабильный контракт для будущего LLM-анализатора
+- позволять тестировать orchestration независимо от модели ИИ
+"""
 
 from __future__ import annotations
 
@@ -16,7 +26,15 @@ class SeverityAssessment:
 
 
 class RuleBasedIncidentAnalyzer:
-    """Простой эвристический анализатор, готовый к последующей замене на LLM."""
+    """Простой эвристический анализатор, готовый к последующей замене на LLM.
+
+    Внутри используются наборы ключевых слов и простые scoring-правила.
+    Они не претендуют на идеальную точность, но хорошо подходят для:
+
+    - демонстрации архитектуры
+    - быстрых интеграционных тестов
+    - понятного baseline-поведения системы
+    """
 
     _SECURITY_KEYWORDS = (
         "security",
@@ -77,7 +95,12 @@ class RuleBasedIncidentAnalyzer:
     )
 
     def classify(self, title: str, description: str, metadata: dict[str, object]) -> str:
-        """Классифицирует инцидент по тексту и метаданным."""
+        """Классифицирует инцидент по тексту и метаданным.
+
+        Приоритет проверок важен: security ищется раньше, чем инфраструктурные
+        или сетевые признаки, потому что security-инциденты требуют более
+        агрессивной маршрутизации и эскалации.
+        """
 
         haystack = self._normalize(title, description, metadata)
         if self._contains_any(haystack, self._SECURITY_KEYWORDS):
@@ -98,7 +121,12 @@ class RuleBasedIncidentAnalyzer:
         classification: str,
         metadata: dict[str, object],
     ) -> SeverityAssessment:
-        """Определяет уровень критичности и приоритетный score."""
+        """Определяет уровень критичности и приоритетный score.
+
+        Логика намеренно прозрачная: итоговый score складывается из набора
+        бизнес-сигналов вроде `production`, `outage`, `security`, `queue`.
+        Это позволяет легко объяснять решение и настраивать правила.
+        """
 
         haystack = self._normalize(title, description, metadata)
         score = 20
@@ -152,9 +180,13 @@ class RuleBasedIncidentAnalyzer:
 
     @staticmethod
     def _normalize(title: str, description: str, metadata: dict[str, object]) -> str:
+        """Склеивает входные поля в одну поисковую строку для эвристик."""
+
         parts = [title, description, " ".join(f"{key} {value}" for key, value in metadata.items())]
         return " ".join(parts).lower()
 
     @staticmethod
     def _contains_any(haystack: str, patterns: tuple[str, ...]) -> bool:
+        """Проверяет, содержится ли хотя бы один шаблон в нормализованном тексте."""
+
         return any(pattern in haystack for pattern in patterns)

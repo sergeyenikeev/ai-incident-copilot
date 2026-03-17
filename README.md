@@ -58,6 +58,8 @@
 - архитектура: [`docs/architecture.md`](docs/architecture.md)
 - API: [`docs/api.md`](docs/api.md)
 - workflow: [`docs/workflow.md`](docs/workflow.md)
+- модули проекта: [`docs/modules.md`](docs/modules.md)
+- описание разработки: [`docs/development.md`](docs/development.md)
 
 ## Технологический стек
 

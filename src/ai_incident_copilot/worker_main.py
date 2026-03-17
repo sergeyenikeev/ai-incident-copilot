@@ -1,4 +1,16 @@
-"""Точка входа worker-сервиса."""
+"""Точка входа worker-сервиса.
+
+Модуль выполняет bootstrap фонового процесса:
+
+- читает конфигурацию
+- настраивает логирование
+- создаёт Kafka consumer и publisher
+- собирает workflow service и worker orchestration
+- поддерживает readiness-файл для Kubernetes probes
+
+В отличие от `workers.incident_analysis_worker`, здесь почти нет бизнес-логики:
+это слой запуска и корректного завершения процесса.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +28,11 @@ from ai_incident_copilot.workers.incident_analysis_worker import IncidentAnalysi
 
 
 async def run_worker() -> None:
-    """Запускает цикл обработки Kafka-сообщений."""
+    """Запускает цикл обработки Kafka-сообщений.
+
+    Функция отвечает за полный жизненный цикл worker-процесса, включая
+    регистрацию signal handler'ов и освобождение ресурсов при shutdown.
+    """
 
     settings = get_settings()
     configure_logging(settings.app_log_level)
@@ -45,6 +61,8 @@ async def run_worker() -> None:
 
     await event_publisher.start()
     await consumer.start()
+    # Readiness-файл используется probes'ами в Kubernetes. Он появляется только
+    # после успешного старта зависимостей и удаляется при остановке процесса.
     await asyncio.to_thread(ready_file.parent.mkdir, parents=True, exist_ok=True)
     await asyncio.to_thread(ready_file.write_text, "ready", encoding="utf-8")
     logger.info("Worker-сервис запущен")

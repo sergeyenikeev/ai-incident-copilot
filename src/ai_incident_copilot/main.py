@@ -1,4 +1,16 @@
-"""Точка входа API-приложения."""
+"""Главная точка входа API-сервиса.
+
+Модуль отвечает за сборку FastAPI-приложения, настройку жизненного цикла
+процесса и связывание инфраструктурных зависимостей:
+
+- конфигурации
+- логирования
+- подключения к БД
+- Kafka publisher
+- метрик
+
+Именно отсюда начинается runtime-поток HTTP-части системы.
+"""
 
 from __future__ import annotations
 
@@ -21,13 +33,25 @@ from ai_incident_copilot.events.kafka import build_event_publisher
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    """Создаёт и настраивает экземпляр FastAPI."""
+    """Создаёт и настраивает экземпляр FastAPI.
+
+    Функция выделена отдельно от `main`, чтобы приложение было удобно:
+
+    - переиспользовать в тестах
+    - запускать под ASGI-сервером
+    - собирать с подменёнными настройками
+    """
 
     app_settings = settings or get_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        """Жизненный цикл FastAPI-приложения."""
+        """Жизненный цикл FastAPI-приложения.
+
+        Здесь поднимаются "долгоживущие" зависимости процесса. Мы не хотим
+        создавать Kafka publisher или engine БД на каждый HTTP-запрос, поэтому
+        инициализируем их один раз на старте процесса и кладём в `app.state`.
+        """
 
         configure_logging(app_settings.app_log_level)
         logger = get_logger(__name__)
@@ -35,6 +59,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         event_publisher = build_event_publisher(app_settings)
         await event_publisher.start()
 
+        # `app.state` выступает простым контейнером зависимостей приложения.
+        # DI-слой затем получает объекты отсюда и пробрасывает их в handlers.
         app.state.settings = app_settings
         app.state.database_manager = database_manager
         app.state.event_publisher = event_publisher
@@ -67,6 +93,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(incidents_router)
     register_exception_handlers(app)
 
+    # Метрики подключаются после сборки маршрутов, чтобы инструментатор видел
+    # уже финальную форму приложения и не инструментировал `/metrics` повторно.
     instrumentator = Instrumentator(excluded_handlers=["/metrics"])
     instrumentator.instrument(app).expose(app, include_in_schema=False, endpoint="/metrics")
 
@@ -77,7 +105,12 @@ app = create_app()
 
 
 def main() -> None:
-    """Запускает HTTP API через Uvicorn."""
+    """Запускает HTTP API через Uvicorn.
+
+    Здесь нет бизнес-логики: только чтение настроек и запуск ASGI-сервера.
+    Это упрощает тестирование и даёт чёткую границу между bootstrap-кодом
+    и прикладным приложением.
+    """
 
     settings = get_settings()
     uvicorn.run(

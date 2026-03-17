@@ -1,4 +1,15 @@
-"""Настройка структурированного логирования."""
+"""Настройка структурированного логирования.
+
+Логирование в проекте задумано как единый источник операционной правды.
+Модуль конфигурирует JSON-логи для:
+
+- нашего приложения
+- Uvicorn
+- aiokafka
+
+Дополнительно здесь живут helpers для контекста (`request_id`, `incident_id`,
+`workflow_run_id` и других связующих полей).
+"""
 
 from __future__ import annotations
 
@@ -21,13 +32,20 @@ Processor = Callable[
 
 
 def configure_logging(level_name: str) -> None:
-    """Инициализирует JSON-логирование для приложения и сторонних библиотек."""
+    """Инициализирует JSON-логирование для приложения и сторонних библиотек.
+
+    Конфигурация выполняется один раз на процесс. Это защищает от ситуации,
+    когда тесты или повторный bootstrap навешивают несколько handler'ов и
+    начинают дублировать каждую запись в stdout.
+    """
 
     global _LOGGER_CONFIGURED
     if _LOGGER_CONFIGURED:
         return
 
     level = getattr(logging, level_name.upper(), logging.INFO)
+    # Эти processors применяются и к нашим логам, и к логам сторонних
+    # библиотек, чтобы выход был единообразным по формату и ключам.
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
@@ -81,7 +99,12 @@ def get_logger(name: str) -> BoundLogger:
 
 
 def bind_logging_context(**kwargs: Any) -> None:
-    """Привязывает ключи к текущему logging context."""
+    """Привязывает ключи к текущему logging context.
+
+    Используется, чтобы в логах автоматически появлялись корреляционные поля
+    вроде `request_id`, `incident_id` и `event_id` без ручной прокладки в
+    каждый `logger.info(...)`.
+    """
 
     cleaned = {key: value for key, value in kwargs.items() if value is not None}
     if cleaned:
@@ -103,4 +126,6 @@ def get_request_id() -> str | None:
 
 
 def _json_dumps(value: Any, **_: Any) -> str:
+    """Сериализует структуру лога в JSON через быстрый `orjson`."""
+
     return orjson.dumps(value).decode("utf-8")

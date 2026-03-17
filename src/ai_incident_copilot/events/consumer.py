@@ -1,4 +1,9 @@
-"""Базовый Kafka consumer для worker-сервиса."""
+"""Базовый Kafka consumer для worker-сервиса.
+
+Модуль намеренно тонкий: он не содержит бизнес-правил и почти не знает
+о предметной области. Его задача — безопасно завернуть `AIOKafkaConsumer`
+и дать worker-слою маленький, удобный и тестируемый интерфейс.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,11 @@ from ai_incident_copilot.core.logging import get_logger
 
 
 class KafkaEventConsumer:
-    """Обёртка над AIOKafkaConsumer для фоновой обработки событий."""
+    """Обёртка над AIOKafkaConsumer для фоновой обработки событий.
+
+    В проекте offset'ы коммитятся вручную, поэтому consumer создаётся
+    с `enable_auto_commit=False`.
+    """
 
     def __init__(self, settings: Settings, *topics: str) -> None:
         self._settings = settings
@@ -45,7 +54,11 @@ class KafkaEventConsumer:
             yield message
 
     async def getmany(self, timeout_ms: int) -> dict[object, list[ConsumerRecord]]:
-        """Возвращает пачку сообщений с таймаутом polling."""
+        """Возвращает пачку сообщений с таймаутом polling.
+
+        Batch-подход удобнее бесконечного `async for`, когда worker должен
+        периодически проверять флаг остановки и корректно завершаться.
+        """
 
         return cast(dict[object, list[ConsumerRecord]], await self._consumer.getmany(timeout_ms=timeout_ms))
 

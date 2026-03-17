@@ -1,4 +1,14 @@
-"""Маршруты работы с инцидентами."""
+"""HTTP-маршруты работы с инцидентами.
+
+Роутер держит только transport-логику:
+
+- принять и провалидировать HTTP-запрос
+- вызвать прикладной сервис
+- собрать envelope-ответ
+- вернуть доменную ошибку в понятной API-форме
+
+Вся бизнес-логика намеренно вынесена в `IncidentService`.
+"""
 
 from __future__ import annotations
 
@@ -38,6 +48,8 @@ async def create_incident(
 ) -> ResponseEnvelope[IncidentResponse]:
     """Создаёт новый инцидент."""
 
+    # Роутер не знает, как именно обеспечивается идемпотентность; он просто
+    # пробрасывает ключ дальше в прикладной слой.
     incident = await service.create(payload, idempotency_key)
     return ResponseEnvelope(data=incident)
 
@@ -72,6 +84,8 @@ async def list_incidents(
 ) -> PaginatedResponse[IncidentListResponse]:
     """Возвращает список инцидентов с пагинацией и фильтрацией."""
 
+    # HTTP query-параметры преобразуются в typed filter object, чтобы дальше
+    # сервис и репозиторий работали уже с согласованной моделью фильтрации.
     filters = IncidentFilterParams(
         status=status_filter,
         classification=classification,
@@ -103,6 +117,8 @@ async def analyze_incident(
 ) -> ResponseEnvelope[IncidentResponse]:
     """Переводит инцидент в очередь на анализ."""
 
+    # Важно: endpoint только ставит инцидент в очередь анализа и сразу отвечает
+    # клиенту. Сам workflow запускается позже во worker-процессе.
     incident = await service.request_analysis(incident_id)
     if incident is None:
         raise ApplicationError(

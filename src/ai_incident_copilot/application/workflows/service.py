@@ -1,4 +1,16 @@
-"""LangGraph workflow анализа инцидента."""
+"""Сервис orchestration для LangGraph workflow анализа инцидента.
+
+Это главный модуль интеллектуальной обработки. Он отвечает не только за
+запуск графа, но и за полную трассировку выполнения в БД:
+
+- создаёт `workflow_runs`
+- сохраняет каждый шаг в `workflow_steps`
+- обновляет итоговое состояние инцидента
+- логирует ошибки и успешное завершение
+
+Именно здесь rule-based или будущая LLM-логика превращается в управляемый,
+наблюдаемый и повторяемый процесс.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +41,11 @@ type StateHandler = Callable[[IncidentWorkflowState], IncidentWorkflowState]
 
 
 class IncidentWorkflowService:
-    """Выполняет LangGraph workflow анализа и сохраняет шаги в БД."""
+    """Выполняет LangGraph workflow анализа и сохраняет шаги в БД.
+
+    Сервис отделяет orchestration от конкретного алгоритма анализа.
+    Сам анализатор можно заменить, не переписывая связку с БД и LangGraph.
+    """
 
     def __init__(
         self,
@@ -46,7 +62,16 @@ class IncidentWorkflowService:
         incident_id: UUID,
         trigger_event_id: UUID | None = None,
     ) -> IncidentWorkflowResult:
-        """Запускает workflow анализа для конкретного инцидента."""
+        """Запускает workflow анализа для конкретного инцидента.
+
+        Метод охватывает весь жизненный цикл одного workflow-run:
+
+        1. загрузка инцидента
+        2. создание записи `workflow_runs`
+        3. перевод инцидента в `analyzing`
+        4. выполнение LangGraph
+        5. запись итогов обратно в `incidents`
+        """
 
         async with self._session_factory() as session:
             incident_repository = IncidentRepository(session)
@@ -57,6 +82,8 @@ class IncidentWorkflowService:
             if incident is None:
                 raise ValueError(f"Инцидент {incident_id} не найден")
 
+            # `workflow_run` создаётся до фактического старта графа, чтобы у нас
+            # сразу появился идентификатор запуска для логов, шагов и аудита.
             workflow_run = WorkflowRun(
                 incident_id=incident.id,
                 trigger_event_id=trigger_event_id,
@@ -67,10 +94,14 @@ class IncidentWorkflowService:
             workflow_run_repository.add(workflow_run)
             await session.flush()
 
+            # Статус `analyzing` позволяет API и операторам видеть, что работа
+            # действительно началась, а не просто стоит в очереди.
             incident.status = IncidentStatus.ANALYZING
             await workflow_run_repository.mark_running(workflow_run)
             await session.commit()
 
+            # Граф строится динамически, но на основе типизированного состояния
+            # и стабильного набора узлов. Это облегчает будущую замену узлов.
             graph = self._build_graph(
                 session=session,
                 workflow_run=workflow_run,
@@ -88,6 +119,8 @@ class IncidentWorkflowService:
             try:
                 final_state = cast(IncidentWorkflowState, await graph.ainvoke(initial_state))
             except Exception as exc:
+                # Ошибка на любом шаге должна быть отражена и в БД, и в логах;
+                # иначе инцидент зависнет в промежуточном состоянии.
                 incident.status = IncidentStatus.FAILED
                 await workflow_run_repository.mark_failed(workflow_run, str(exc))
                 await session.commit()
@@ -98,6 +131,8 @@ class IncidentWorkflowService:
                 )
                 raise
 
+            # Ниже выполняется "сведение" workflow-state обратно в доменную
+            # модель инцидента, которую увидят API-клиенты и downstream-системы.
             incident.classification = final_state["classification"]
             incident.severity = final_state["severity"]
             incident.priority_score = final_state["priority_score"]
@@ -134,6 +169,12 @@ class IncidentWorkflowService:
         workflow_run: WorkflowRun,
         workflow_step_repository: WorkflowStepRepository,
     ) -> Any:
+        """Собирает LangGraph из типизированных node-функций.
+
+        Каждый node оборачивается через `_run_step`, чтобы любой этап
+        автоматически попадал в таблицу `workflow_steps`.
+        """
+
         graph = StateGraph(IncidentWorkflowState)
 
         async def classify_node(state: IncidentWorkflowState) -> IncidentWorkflowState:
@@ -181,6 +222,8 @@ class IncidentWorkflowService:
         graph.add_node("generate_standard_recommendation", standard_recommendation_node)
         graph.add_node("generate_escalated_recommendation", escalated_recommendation_node)
 
+        # Последовательность узлов задаёт основной pipeline анализа:
+        # классификация -> оценка тяжести -> выбор ветки рекомендации.
         graph.add_edge(START, "classify_incident")
         graph.add_edge("classify_incident", "determine_severity")
         graph.add_conditional_edges(
@@ -205,6 +248,16 @@ class IncidentWorkflowService:
         state: IncidentWorkflowState,
         handler: StateHandler,
     ) -> IncidentWorkflowState:
+        """Выполняет один шаг workflow и синхронизирует его с БД.
+
+        Этот helper обеспечивает единый паттерн для всех узлов:
+
+        - создать `workflow_steps` со статусом `pending`
+        - перевести шаг в `running`
+        - выполнить handler
+        - сохранить `completed` или `failed`
+        """
+
         step = WorkflowStep(
             workflow_run_id=workflow_run.id,
             node_name=node_name,
@@ -239,6 +292,8 @@ class IncidentWorkflowService:
         return updates
 
     def _classify_incident(self, state: IncidentWorkflowState) -> IncidentWorkflowState:
+        """Определяет категорию инцидента и дополняет workflow-state."""
+
         classification = self._analyzer.classify(
             title=state["title"],
             description=state["description"],
@@ -250,6 +305,8 @@ class IncidentWorkflowService:
         }
 
     def _determine_severity(self, state: IncidentWorkflowState) -> IncidentWorkflowState:
+        """Вычисляет severity, priority_score и ветку дальнейшей реакции."""
+
         assessment = self._analyzer.determine_severity(
             title=state["title"],
             description=state["description"],
@@ -271,6 +328,8 @@ class IncidentWorkflowService:
         self,
         state: IncidentWorkflowState,
     ) -> IncidentWorkflowState:
+        """Генерирует рекомендацию для обычного маршрута обработки."""
+
         severity = state["severity"]
         assert severity is not None
         recommendation = self._analyzer.standard_recommendation(
@@ -286,6 +345,8 @@ class IncidentWorkflowService:
         self,
         state: IncidentWorkflowState,
     ) -> IncidentWorkflowState:
+        """Генерирует усиленную рекомендацию для тяжёлых кейсов."""
+
         severity = state["severity"]
         assert severity is not None
         recommendation = self._analyzer.escalated_recommendation(
@@ -299,10 +360,14 @@ class IncidentWorkflowService:
 
     @staticmethod
     def _choose_recommendation_route(state: IncidentWorkflowState) -> str:
+        """Возвращает имя ветки LangGraph после расчёта severity."""
+
         return state["route"] or "standard"
 
     @staticmethod
     def _incident_payload(incident: Incident) -> dict[str, object]:
+        """Собирает снимок инцидента для входного payload workflow-run."""
+
         return {
             "id": str(incident.id),
             "title": incident.title,
