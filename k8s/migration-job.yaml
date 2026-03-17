@@ -6,6 +6,8 @@ metadata:
     app.kubernetes.io/name: ai-incident-copilot
     app.kubernetes.io/component: migration
 spec:
+  # Job выполняет миграции ограниченное число раз и затем автоматически
+  # удаляется спустя ttl, чтобы не засорять namespace историческими job'ами.
   backoffLimit: 3
   ttlSecondsAfterFinished: 300
   template:
@@ -19,6 +21,8 @@ spec:
         - name: migration
           image: ghcr.io/sergeyenikeev/ai-incident-copilot-api:latest
           imagePullPolicy: IfNotPresent
+          # Используем API-образ, потому что в нём уже лежат Alembic, модели
+          # и всё Python-окружение, необходимое для применения миграций.
           command: ["sh", "-lc", "alembic upgrade head"]
           envFrom:
             - configMapRef:

@@ -1,4 +1,15 @@
-"""Общие фикстуры тестового набора."""
+"""Общие фикстуры тестового набора.
+
+Этот модуль задаёт тестовый runtime проекта:
+
+- временную SQLite-базу
+- применение Alembic-миграций
+- создание FastAPI-приложения
+- `TestClient`
+- лёгкий `DatabaseManager` для unit-тестов
+
+Именно поэтому большая часть тестов остаётся короткой и читабельной.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +29,13 @@ from alembic import command
 
 @pytest.fixture
 def sqlite_urls(tmp_path: Path) -> dict[str, str]:
-    """Возвращает sync/async URL для временной SQLite-базы."""
+    """Возвращает sync/async URL для временной SQLite-базы.
+
+    Нам нужны сразу два URL:
+
+    - sync для Alembic
+    - async для runtime-кода приложения
+    """
 
     db_path = tmp_path / "incident-test.db"
     return {
@@ -30,7 +47,11 @@ def sqlite_urls(tmp_path: Path) -> dict[str, str]:
 
 @pytest.fixture
 def migrated_settings(monkeypatch: pytest.MonkeyPatch, sqlite_urls: dict[str, str]) -> Settings:
-    """Применяет Alembic-миграции и возвращает настройки приложения для интеграционных тестов."""
+    """Применяет Alembic-миграции и возвращает настройки для интеграционных тестов.
+
+    Мы deliberately прогоняем реальные миграции даже в тестах, чтобы проверять
+    не только ORM-модели, но и фактическую совместимость схемы БД.
+    """
 
     get_settings.cache_clear()
     monkeypatch.setenv("DATABASE_URL_SYNC", sqlite_urls["sync"])
@@ -63,7 +84,11 @@ def client(app) -> TestClient:
 
 @pytest.fixture
 async def unit_db_manager(sqlite_urls: dict[str, str]) -> DatabaseManager:
-    """Лёгкая БД для unit-тестов через прямое создание схемы."""
+    """Лёгкая БД для unit-тестов через прямое создание схемы.
+
+    Для unit-тестов важно стартовать быстрее, поэтому здесь используется
+    `create_all`, а не полный Alembic-контур.
+    """
 
     manager = DatabaseManager(sqlite_urls["async"])
     await manager.create_all()

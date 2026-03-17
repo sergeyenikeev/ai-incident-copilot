@@ -407,6 +407,8 @@ runtime-потоку:
 - БД
 - worker flow
 
+Подробный разбор тестового контура: `docs/testing.md`
+
 ## Инфраструктурные файлы
 
 ### `Dockerfile.api`

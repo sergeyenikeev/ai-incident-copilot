@@ -61,6 +61,7 @@
 - модули проекта: [`docs/modules.md`](docs/modules.md)
 - описание разработки: [`docs/development.md`](docs/development.md)
 - инфраструктура и деплой: [`docs/infrastructure.md`](docs/infrastructure.md)
+- тестирование: [`docs/testing.md`](docs/testing.md)
 
 ## Технологический стек
 

@@ -35,6 +35,8 @@ spec:
               memory: 512Mi
           livenessProbe:
             exec:
+              # У worker нет HTTP endpoint, поэтому probe опирается на readiness-
+              # файл, который создаётся `worker_main.py` после старта зависимостей.
               command: ["python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/tmp/ai-incident-worker.ready').exists() else 1)"]
             initialDelaySeconds: 20
             periodSeconds: 30

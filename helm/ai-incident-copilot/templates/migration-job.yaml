@@ -4,6 +4,7 @@ kind: Job
 metadata:
   name: {{ include "ai-incident-copilot.fullname" . }}-migration
   annotations:
+    # Hook запускает миграции до rollout workload'ов на install/upgrade.
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
     "helm.sh/hook-weight": "-5"

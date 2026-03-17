@@ -25,6 +25,8 @@ spec:
         - name: api
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          # Команда приложения вынесена в values, чтобы chart можно было
+          # адаптировать под другой entrypoint без переписывания шаблона.
           command:
             {{- toYaml .Values.api.command | nindent 12 }}
           ports:

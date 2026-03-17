@@ -1,4 +1,14 @@
-"""Начальная схема хранения инцидентов и workflow."""
+"""Начальная схема хранения инцидентов и workflow.
+
+Это первая базовая миграция проекта. Она создаёт весь первичный набор таблиц,
+на которых держится runtime:
+
+- incidents
+- incident_events
+- workflow_runs
+- workflow_steps
+- audit_logs
+"""
 
 from __future__ import annotations
 
@@ -64,6 +74,12 @@ incident_event_type = sa.Enum(
 
 
 def upgrade() -> None:
+    """Создаёт начальную схему приложения.
+
+    Порядок создания таблиц выбран так, чтобы сначала появились базовые
+    сущности, а затем зависящие от них таблицы с внешними ключами.
+    """
+
     op.create_table(
         "incidents",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -89,6 +105,8 @@ def upgrade() -> None:
     op.create_index(op.f("ix_incidents_severity"), "incidents", ["severity"], unique=False)
     op.create_index(op.f("ix_incidents_idempotency_key"), "incidents", ["idempotency_key"], unique=True)
 
+    # `incident_events` создаётся сразу после `incidents`, потому что на нём
+    # держится event-driven журнал и связь с последующими workflow-run'ами.
     op.create_table(
         "incident_events",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -153,6 +171,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_workflow_runs_incident_id"), "workflow_runs", ["incident_id"], unique=False)
 
+    # Таблица шагов хранит детальную историю выполнения LangGraph по node'ам.
     op.create_table(
         "workflow_steps",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -202,6 +221,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Удаляет схему в обратном порядке зависимостей."""
+
     op.drop_index(op.f("ix_audit_logs_request_id"), table_name="audit_logs")
     op.drop_index(op.f("ix_audit_logs_entity_type"), table_name="audit_logs")
     op.drop_index(op.f("ix_audit_logs_entity_id"), table_name="audit_logs")

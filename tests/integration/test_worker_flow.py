@@ -1,4 +1,13 @@
-"""Интеграционный тест worker-потока на mock Kafka payload."""
+"""Интеграционный тест worker-потока на mock Kafka payload.
+
+Тест покрывает самый важный асинхронный сценарий проекта без реального Kafka:
+
+- API создаёт инцидент
+- API ставит инцидент в анализ
+- из таблицы `incident_events` берётся payload исходного события
+- worker обрабатывает его напрямую
+- в БД появляются workflow-артефакты и итоговое событие завершения анализа
+"""
 
 from __future__ import annotations
 
@@ -14,7 +23,11 @@ from ai_incident_copilot.workers.incident_analysis_worker import IncidentAnalysi
 
 
 class DummyConsumer:
-    """Минимальная заглушка consumer для прямого вызова worker."""
+    """Минимальная заглушка consumer для прямого вызова worker.
+
+    В этом тесте consumer как объект worker'у не нужен, потому что мы вызываем
+    `_process_record` напрямую и не запускаем полноценный polling-loop.
+    """
 
 
 def test_worker_processes_analysis_requested_event(
@@ -22,6 +35,8 @@ def test_worker_processes_analysis_requested_event(
     migrated_settings: Settings,
     sqlite_urls: dict[str, str],
 ) -> None:
+    """Проверяет сквозной worker-flow от события запроса анализа до результата."""
+
     created = client.post(
         "/api/v1/incidents",
         json={
@@ -36,6 +51,9 @@ def test_worker_processes_analysis_requested_event(
 
     assert analyze.status_code == 200
 
+    # Забираем из БД фактический payload события, который API сгенерировал для
+    # Kafka. Это даёт более реалистичный интеграционный сценарий, чем ручная
+    # сборка event JSON внутри теста.
     connection = sqlite3.connect(sqlite_urls["path"])
     cursor = connection.cursor()
     cursor.execute(
@@ -47,6 +65,8 @@ def test_worker_processes_analysis_requested_event(
     connection.close()
 
     async def run_once() -> None:
+        """Локально поднимает зависимости worker и обрабатывает одно сообщение."""
+
         db_manager = DatabaseManager(migrated_settings.database_url_async)
         publisher = build_event_publisher(migrated_settings)
         await publisher.start()
@@ -63,6 +83,8 @@ def test_worker_processes_analysis_requested_event(
 
     asyncio.run(run_once())
 
+    # Проверяем не только состояние инцидента, но и то, что появились записи
+    # о запуске workflow, шагах и completed-событии.
     connection = sqlite3.connect(sqlite_urls["path"])
     cursor = connection.cursor()
     cursor.execute("select status, classification, severity from incidents order by created_at desc limit 1")
