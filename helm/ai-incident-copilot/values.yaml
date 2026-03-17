@@ -1,0 +1,81 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+config:
+  appEnv: production
+  appDebug: "false"
+  appHost: 0.0.0.0
+  appPort: "8080"
+  appLogLevel: INFO
+  postgresHost: postgres.default.svc.cluster.local
+  postgresPort: "5432"
+  postgresDb: ai_incident_copilot
+  kafkaBootstrapServers: kafka.default.svc.cluster.local:9092
+  kafkaEnabled: "true"
+  kafkaFailFast: "false"
+  kafkaClientId: ai-incident-api
+  topicIncidentCreated: incident.created
+  topicAnalysisRequested: incident.analysis.requested
+  topicAnalysisCompleted: incident.analysis.completed
+
+secret:
+  postgresUser: incident
+  postgresPassword: change-me
+
+api:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/sergeyenikeev/ai-incident-copilot-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  livenessProbe:
+    initialDelaySeconds: 20
+    periodSeconds: 15
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+worker:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/sergeyenikeev/ai-incident-copilot-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+  hosts:
+    - host: ai-incident-copilot.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  averageUtilization: 70

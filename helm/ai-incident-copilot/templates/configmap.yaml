@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-incident-copilot.fullname" . }}-config
+  labels:
+    {{- include "ai-incident-copilot.labels" . | nindent 4 }}
+data:
+  APP_ENV: {{ .Values.config.appEnv | quote }}
+  APP_DEBUG: {{ .Values.config.appDebug | quote }}
+  APP_HOST: {{ .Values.config.appHost | quote }}
+  APP_PORT: {{ .Values.config.appPort | quote }}
+  APP_LOG_LEVEL: {{ .Values.config.appLogLevel | quote }}
+  POSTGRES_HOST: {{ .Values.config.postgresHost | quote }}
+  POSTGRES_PORT: {{ .Values.config.postgresPort | quote }}
+  POSTGRES_DB: {{ .Values.config.postgresDb | quote }}
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.config.kafkaBootstrapServers | quote }}
+  KAFKA_ENABLED: {{ .Values.config.kafkaEnabled | quote }}
+  KAFKA_FAIL_FAST: {{ .Values.config.kafkaFailFast | quote }}
+  KAFKA_CLIENT_ID: {{ .Values.config.kafkaClientId | quote }}
+  KAFKA_TOPIC_INCIDENT_CREATED: {{ .Values.config.topicIncidentCreated | quote }}
+  KAFKA_TOPIC_ANALYSIS_REQUESTED: {{ .Values.config.topicAnalysisRequested | quote }}
+  KAFKA_TOPIC_ANALYSIS_COMPLETED: {{ .Values.config.topicAnalysisCompleted | quote }}

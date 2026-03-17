@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-incident-copilot-config
+  labels:
+    app.kubernetes.io/name: ai-incident-copilot
+data:
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_HOST: 0.0.0.0
+  APP_PORT: "8080"
+  APP_LOG_LEVEL: INFO
+  POSTGRES_HOST: postgres.default.svc.cluster.local
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ai_incident_copilot
+  KAFKA_BOOTSTRAP_SERVERS: kafka.default.svc.cluster.local:9092
+  KAFKA_ENABLED: "true"
+  KAFKA_FAIL_FAST: "false"
+  KAFKA_CLIENT_ID: ai-incident-api
+  KAFKA_TOPIC_INCIDENT_CREATED: incident.created
+  KAFKA_TOPIC_ANALYSIS_REQUESTED: incident.analysis.requested
+  KAFKA_TOPIC_ANALYSIS_COMPLETED: incident.analysis.completed

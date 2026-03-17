@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ai-incident-copilot
+description: Helm chart для event-driven AI incident copilot
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
