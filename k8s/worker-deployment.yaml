@@ -35,11 +35,11 @@ spec:
               memory: 512Mi
           livenessProbe:
             exec:
-              command: ["python", "-c", "print('worker alive')"]
+              command: ["python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/tmp/ai-incident-worker.ready').exists() else 1)"]
             initialDelaySeconds: 20
             periodSeconds: 30
           readinessProbe:
             exec:
-              command: ["python", "-c", "print('worker ready')"]
+              command: ["python", "-c", "from pathlib import Path; import sys; sys.exit(0 if Path('/tmp/ai-incident-worker.ready').exists() else 1)"]
             initialDelaySeconds: 10
             periodSeconds: 15

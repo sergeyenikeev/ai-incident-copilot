@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from pathlib import Path
 
 from ai_incident_copilot.application.workflows.service import IncidentWorkflowService
 from ai_incident_copilot.core.config import get_settings
@@ -21,6 +22,7 @@ async def run_worker() -> None:
     configure_logging(settings.app_log_level)
     logger = get_logger(__name__)
     stop_event = asyncio.Event()
+    ready_file = Path(settings.worker_ready_file)
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -43,10 +45,14 @@ async def run_worker() -> None:
 
     await event_publisher.start()
     await consumer.start()
+    await asyncio.to_thread(ready_file.parent.mkdir, parents=True, exist_ok=True)
+    await asyncio.to_thread(ready_file.write_text, "ready", encoding="utf-8")
     logger.info("Worker-сервис запущен")
     try:
         await worker.run(stop_event)
     finally:
+        if await asyncio.to_thread(ready_file.exists):
+            await asyncio.to_thread(ready_file.unlink)
         await consumer.stop()
         await event_publisher.stop()
         await database_manager.dispose()

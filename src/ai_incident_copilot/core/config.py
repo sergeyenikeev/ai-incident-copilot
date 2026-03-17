@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     kafka_max_retries: int = 3
     worker_poll_timeout_ms: int = 1_000
     worker_retry_backoff_seconds: float = 1.5
+    worker_ready_file: str = "/tmp/ai-incident-worker.ready"
 
     @property
     def database_url_async(self) -> str:

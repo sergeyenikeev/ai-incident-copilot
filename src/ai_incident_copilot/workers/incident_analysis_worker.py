@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ai_incident_copilot.application.workflows.service import IncidentWorkflowService
 from ai_incident_copilot.application.workflows.state import IncidentWorkflowResult
 from ai_incident_copilot.core.config import Settings
-from ai_incident_copilot.core.logging import get_logger
+from ai_incident_copilot.core.logging import bind_logging_context, clear_logging_context, get_logger
 from ai_incident_copilot.db.models import IncidentEvent
 from ai_incident_copilot.db.repositories.events import IncidentEventRepository
 from ai_incident_copilot.domain.enums import (
@@ -66,43 +66,50 @@ class IncidentAnalysisWorker:
         source_key = str(event.metadata.event_id)
         incident_id = event.metadata.incident_id
 
+        clear_logging_context()
+        bind_logging_context(incident_id=str(incident_id), event_id=source_key)
+
         if await self._is_duplicate(source_key):
             self._logger.info(
                 "Повторное сообщение пропущено как уже обработанное",
                 incident_id=str(incident_id),
                 event_id=source_key,
             )
+            clear_logging_context()
             return
 
-        for attempt in range(1, self._settings.kafka_max_retries + 1):
-            try:
-                result = await self._workflow_service.run(
-                    incident_id=incident_id,
-                    trigger_event_id=await self._get_source_event_id(source_key),
-                )
-            except Exception as exc:
-                await self._record_retry(source_key, str(exc))
-                if attempt == self._settings.kafka_max_retries:
-                    self._logger.exception(
-                        "Не удалось обработать событие анализа после всех попыток",
+        try:
+            for attempt in range(1, self._settings.kafka_max_retries + 1):
+                try:
+                    result = await self._workflow_service.run(
+                        incident_id=incident_id,
+                        trigger_event_id=await self._get_source_event_id(source_key),
+                    )
+                except Exception as exc:
+                    await self._record_retry(source_key, str(exc))
+                    if attempt == self._settings.kafka_max_retries:
+                        self._logger.exception(
+                            "Не удалось обработать событие анализа после всех попыток",
+                            incident_id=str(incident_id),
+                            event_id=source_key,
+                            attempt=attempt,
+                        )
+                        return
+
+                    self._logger.warning(
+                        "Ошибка обработки события, будет выполнен повтор",
                         incident_id=str(incident_id),
                         event_id=source_key,
                         attempt=attempt,
+                        error=str(exc),
                     )
-                    return
+                    await asyncio.sleep(self._settings.worker_retry_backoff_seconds * attempt)
+                    continue
 
-                self._logger.warning(
-                    "Ошибка обработки события, будет выполнен повтор",
-                    incident_id=str(incident_id),
-                    event_id=source_key,
-                    attempt=attempt,
-                    error=str(exc),
-                )
-                await asyncio.sleep(self._settings.worker_retry_backoff_seconds * attempt)
-                continue
-
-            await self._finalize_success(source_key, result)
-            return
+                await self._finalize_success(source_key, result)
+                return
+        finally:
+            clear_logging_context()
 
     async def _is_duplicate(self, source_key: str) -> bool:
         async with self._session_factory() as session:
