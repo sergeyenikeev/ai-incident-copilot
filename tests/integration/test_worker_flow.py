@@ -108,3 +108,36 @@ def test_worker_processes_analysis_requested_event(
     assert steps_total == 3
     assert source_status == "consumed"
     assert completed_total == 1
+
+
+def test_worker_skips_invalid_analysis_requested_payload(
+    migrated_settings: Settings,
+    sqlite_urls: dict[str, str],
+) -> None:
+    async def run_once() -> None:
+        db_manager = DatabaseManager(migrated_settings.database_url_async)
+        publisher = build_event_publisher(migrated_settings)
+        await publisher.start()
+        worker = IncidentAnalysisWorker(
+            settings=migrated_settings,
+            session_factory=db_manager.session_factory,
+            consumer=DummyConsumer(),  # type: ignore[arg-type]
+            event_publisher=publisher,
+            workflow_service=IncidentWorkflowService(db_manager.session_factory),
+        )
+        await worker._process_record(SimpleNamespace(value=b'{"broken": true}'))
+        await publisher.stop()
+        await db_manager.dispose()
+
+    asyncio.run(run_once())
+
+    connection = sqlite3.connect(sqlite_urls["path"])
+    cursor = connection.cursor()
+    cursor.execute("select count(*) from workflow_runs")
+    runs_total = cursor.fetchone()[0]
+    cursor.execute("select count(*) from incident_events")
+    events_total = cursor.fetchone()[0]
+    connection.close()
+
+    assert runs_total == 0
+    assert events_total == 0

@@ -59,6 +59,7 @@
 - API: [`docs/api.md`](docs/api.md)
 - workflow: [`docs/workflow.md`](docs/workflow.md)
 - модули проекта: [`docs/modules.md`](docs/modules.md)
+- структура Python-кода: [`docs/python-structure.md`](docs/python-structure.md)
 - описание разработки: [`docs/development.md`](docs/development.md)
 - архитектурные решения: [`docs/decisions.md`](docs/decisions.md)
 - модель данных: [`docs/data-model.md`](docs/data-model.md)

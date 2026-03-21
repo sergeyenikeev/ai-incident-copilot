@@ -64,6 +64,10 @@ class IncidentService:
         self._session_factory = session_factory
         self._event_publisher = event_publisher
         self._logger = get_logger(__name__)
+        self._analysis_already_requested_statuses = {
+            IncidentStatus.ANALYSIS_REQUESTED,
+            IncidentStatus.ANALYZING,
+        }
 
     async def create(
         self,
@@ -188,6 +192,14 @@ class IncidentService:
             incident = await incident_repository.get_by_id(incident_id)
             if incident is None:
                 return None
+
+            if incident.status in self._analysis_already_requested_statuses:
+                self._logger.info(
+                    "Повторный запрос анализа пропущен как идемпотентный",
+                    incident_id=str(incident.id),
+                    status=incident.status.value,
+                )
+                return self._to_response(incident)
 
             # API лишь ставит инцидент в очередь на анализ; фактическая
             # обработка будет выполнена отдельным worker-процессом.

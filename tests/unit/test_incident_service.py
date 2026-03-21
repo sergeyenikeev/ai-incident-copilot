@@ -57,3 +57,29 @@ async def test_request_analysis_creates_second_event(unit_db_manager) -> None:
     assert analyzed is not None
     assert analyzed.status.value == "analysis_requested"
     assert events_total == 2
+
+
+@pytest.mark.asyncio
+async def test_request_analysis_is_idempotent_for_already_queued_incident(unit_db_manager) -> None:
+    publisher = NoOpEventPublisher(Settings(kafka_enabled=False))
+    await publisher.start()
+    service = IncidentService(unit_db_manager.session_factory, publisher)
+    payload = IncidentCreateRequest(
+        title="Недоступен ingress",
+        description="Пользователи получают 502 и ingress-controller отстаёт по health probes.",
+        source="monitoring",
+        metadata={},
+    )
+
+    created = await service.create(payload, "repeat-analysis-key")
+    first = await service.request_analysis(created.id)
+    second = await service.request_analysis(created.id)
+
+    async with unit_db_manager.session_factory() as session:
+        events_total = await session.scalar(select(func.count()).select_from(IncidentEvent))
+
+    assert first is not None
+    assert second is not None
+    assert first.status.value == "analysis_requested"
+    assert second.status.value == "analysis_requested"
+    assert events_total == 2

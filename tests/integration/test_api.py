@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -60,6 +61,36 @@ def test_incident_crud_and_filters(client) -> None:
     assert get_one.json()["data"]["status"] == "analysis_requested"
     assert filtered.json()["pagination"]["total"] == 1
     assert filtered.json()["data"]["items"][0]["id"] == incident_id
+
+
+def test_repeated_analyze_request_does_not_create_duplicate_event(
+    client,
+    sqlite_urls: dict[str, str],
+) -> None:
+    created = client.post(
+        "/api/v1/incidents",
+        json={
+            "title": "Недоступен checkout",
+            "description": "Пользователи получают ошибки оплаты и checkout перестал завершать заказ.",
+            "source": "monitoring",
+            "metadata": {"service": "checkout"},
+        },
+    )
+    incident_id = created.json()["data"]["id"]
+
+    first = client.post(f"/api/v1/incidents/{incident_id}/analyze")
+    second = client.post(f"/api/v1/incidents/{incident_id}/analyze")
+
+    connection = sqlite3.connect(sqlite_urls["path"])
+    cursor = connection.cursor()
+    cursor.execute("select count(*) from incident_events where event_type = 'incident.analysis.requested'")
+    analysis_events_total = cursor.fetchone()[0]
+    connection.close()
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["data"]["status"] == "analysis_requested"
+    assert analysis_events_total == 1
 
 
 def test_validation_and_not_found_errors_are_structured(client) -> None:

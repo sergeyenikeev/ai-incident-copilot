@@ -17,7 +17,7 @@ import asyncio
 from uuid import UUID, uuid4
 
 from aiokafka import ConsumerRecord
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ai_incident_copilot.application.workflows.service import IncidentWorkflowService
@@ -95,7 +95,18 @@ class IncidentAnalysisWorker:
         - финализация успешного результата
         """
 
-        event = AnalysisRequestedEventAdapter.validate_json(record.value.decode("utf-8"))
+        try:
+            event = AnalysisRequestedEventAdapter.validate_json(record.value.decode("utf-8"))
+        except (UnicodeDecodeError, ValidationError) as exc:
+            self._logger.error(
+                "Пропущено невалидное сообщение incident.analysis.requested",
+                error=str(exc),
+                topic=getattr(record, "topic", None),
+                partition=getattr(record, "partition", None),
+                offset=getattr(record, "offset", None),
+            )
+            return
+
         source_key = str(event.metadata.event_id)
         incident_id = event.metadata.incident_id
 
