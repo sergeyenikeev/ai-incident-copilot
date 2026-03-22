@@ -103,7 +103,7 @@ def test_worker_processes_analysis_requested_event(
     completed_total = cursor.fetchone()[0]
     connection.close()
 
-    assert incident_row == ("analyzed", "security", "high")
+    assert incident_row == ("analyzed", "security", "critical")
     assert runs_total == 1
     assert steps_total == 3
     assert source_status == "consumed"

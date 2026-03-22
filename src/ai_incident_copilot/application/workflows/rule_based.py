@@ -1,40 +1,23 @@
-"""Rule-based анализатор инцидентов для начальной версии workflow.
-
-Этот модуль intentionally прост: он даёт рабочую, детерминированную и
-полностью тестируемую логику анализа без внешнего LLM.
-
-Его роль в архитектуре:
-
-- быть текущим "мозгом" workflow
-- задавать стабильный контракт для будущего LLM-анализатора
-- позволять тестировать orchestration независимо от модели ИИ
-"""
+"""Rule-based incident analyzer for the initial workflow implementation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from ai_incident_copilot.domain.enums import SeverityLevel
 
 
 @dataclass(slots=True, frozen=True)
 class SeverityAssessment:
-    """Результат определения критичности инцидента."""
+    """Severity and priority score returned by the analyzer."""
 
     severity: SeverityLevel
     priority_score: int
 
 
 class RuleBasedIncidentAnalyzer:
-    """Простой эвристический анализатор, готовый к последующей замене на LLM.
-
-    Внутри используются наборы ключевых слов и простые scoring-правила.
-    Они не претендуют на идеальную точность, но хорошо подходят для:
-
-    - демонстрации архитектуры
-    - быстрых интеграционных тестов
-    - понятного baseline-поведения системы
-    """
+    """Deterministic analyzer that can later be swapped with an LLM-backed one."""
 
     _SECURITY_KEYWORDS = (
         "security",
@@ -91,18 +74,44 @@ class RuleBasedIncidentAnalyzer:
         "vpn",
         "сеть",
         "шлюз",
-        "dns",
     )
+    _CUSTOMER_IMPACT_KEYWORDS = (
+        "all users",
+        "customer-facing",
+        "login failure",
+        "checkout failure",
+        "payments unavailable",
+        "global outage",
+        "mass outage",
+        "массов",
+        "все пользователи",
+        "не могут войти",
+        "не проходят платежи",
+    )
+    _BUSINESS_CRITICAL_SERVICE_KEYWORDS = (
+        "auth",
+        "login",
+        "checkout",
+        "payment",
+        "payments",
+        "billing",
+        "gateway",
+        "api-gateway",
+    )
+    _METADATA_CLASSIFICATION_HINTS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "security": ("siem", "soc", "waf", "iam", "security"),
+        "data": ("postgres", "mysql", "redis", "clickhouse", "database", "replica"),
+        "network": ("ingress", "gateway", "dns", "loadbalancer", "vpn", "network"),
+        "infrastructure": ("kubernetes", "worker", "queue", "node", "cluster", "infra"),
+    }
 
     def classify(self, title: str, description: str, metadata: dict[str, object]) -> str:
-        """Классифицирует инцидент по тексту и метаданным.
-
-        Приоритет проверок важен: security ищется раньше, чем инфраструктурные
-        или сетевые признаки, потому что security-инциденты требуют более
-        агрессивной маршрутизации и эскалации.
-        """
+        """Classify the incident by text and metadata hints."""
 
         haystack = self._normalize(title, description, metadata)
+        metadata_hint = self._classification_from_metadata(metadata)
+        if metadata_hint is not None:
+            return metadata_hint
         if self._contains_any(haystack, self._SECURITY_KEYWORDS):
             return "security"
         if self._contains_any(haystack, self._DATA_KEYWORDS):
@@ -121,12 +130,7 @@ class RuleBasedIncidentAnalyzer:
         classification: str,
         metadata: dict[str, object],
     ) -> SeverityAssessment:
-        """Определяет уровень критичности и приоритетный score.
-
-        Логика намеренно прозрачная: итоговый score складывается из набора
-        бизнес-сигналов вроде `production`, `outage`, `security`, `queue`.
-        Это позволяет легко объяснять решение и настраивать правила.
-        """
+        """Calculate severity and priority score from incident signals."""
 
         haystack = self._normalize(title, description, metadata)
         score = 20
@@ -141,6 +145,10 @@ class RuleBasedIncidentAnalyzer:
             score += 25
         if classification in {"data", "network"}:
             score += 15
+        if self._contains_any(haystack, self._CUSTOMER_IMPACT_KEYWORDS):
+            score += 20
+        if self._contains_any(haystack, self._BUSINESS_CRITICAL_SERVICE_KEYWORDS):
+            score += 15
         if any(token in haystack for token in ("critical", "p1", "sev1", "критич", "эвакуац")):
             score += 25
 
@@ -153,40 +161,62 @@ class RuleBasedIncidentAnalyzer:
         return SeverityAssessment(severity=SeverityLevel.LOW, priority_score=25)
 
     def choose_route(self, *, classification: str, severity: SeverityLevel) -> str:
-        """Определяет ветку рекомендации."""
+        """Choose the recommendation branch."""
 
         if classification == "security" or severity == SeverityLevel.CRITICAL:
             return "escalated"
         return "standard"
 
     def standard_recommendation(self, *, classification: str, severity: SeverityLevel) -> str:
-        """Формирует стандартную рекомендацию."""
+        """Return a default recommendation for regular incidents."""
 
+        next_step = self._recommendation_focus(classification)
         return (
             f"Классификация: {classification}. "
             f"Критичность: {severity.value}. "
-            "Проверьте последние деплои, состояние зависимостей, ключевые метрики и подготовьте rollback-план."
+            f"Проверьте последние деплои, состояние зависимостей и {next_step}. "
+            "Подготовьте rollback-план и обновление статуса для дежурной смены."
         )
 
     def escalated_recommendation(self, *, classification: str, severity: SeverityLevel) -> str:
-        """Формирует усиленную рекомендацию для тяжёлых сценариев."""
+        """Return a stronger recommendation for severe incidents."""
 
+        next_step = self._recommendation_focus(classification)
         return (
             f"Классификация: {classification}. "
             f"Критичность: {severity.value}. "
-            "Немедленно соберите war-room, ограничьте blast radius, зафиксируйте артефакты инцидента "
-            "и инициируйте эскалацию на дежурную смену L2/L3."
+            f"Немедленно соберите war-room, ограничьте blast radius и проверьте {next_step}. "
+            "Зафиксируйте артефакты инцидента и инициируйте эскалацию на дежурную смену L2/L3."
         )
+
+    @classmethod
+    def _classification_from_metadata(cls, metadata: dict[str, object]) -> str | None:
+        metadata_values = " ".join(str(value).lower() for value in metadata.values())
+        for classification, hints in cls._METADATA_CLASSIFICATION_HINTS.items():
+            if any(hint in metadata_values for hint in hints):
+                return classification
+        return None
+
+    @staticmethod
+    def _recommendation_focus(classification: str) -> str:
+        focus_map = {
+            "security": "следы компрометации, IAM-события и scope затронутых аккаунтов",
+            "data": "репликацию, свежесть бэкапов и риск потери данных",
+            "network": "ingress, DNS, балансировку и сетевой маршрут до сервиса",
+            "infrastructure": "нагрузку кластера, очередь задач и состояние нод",
+            "application": "ошибки приложения, конфигурацию и внешние интеграции",
+        }
+        return focus_map.get(classification, "ключевые метрики и зависимости")
 
     @staticmethod
     def _normalize(title: str, description: str, metadata: dict[str, object]) -> str:
-        """Склеивает входные поля в одну поисковую строку для эвристик."""
+        """Merge input fields into one normalized search string."""
 
         parts = [title, description, " ".join(f"{key} {value}" for key, value in metadata.items())]
         return " ".join(parts).lower()
 
     @staticmethod
     def _contains_any(haystack: str, patterns: tuple[str, ...]) -> bool:
-        """Проверяет, содержится ли хотя бы один шаблон в нормализованном тексте."""
+        """Check whether at least one pattern appears in the text."""
 
         return any(pattern in haystack for pattern in patterns)
